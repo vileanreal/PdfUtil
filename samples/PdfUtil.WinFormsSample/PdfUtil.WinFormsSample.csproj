@@ -2,8 +2,8 @@
 
   <!--
     A Windows Forms app on .NET Framework 4.8 that checks the net462 build of PdfUtil. It needs the .NET 10 SDK
-    (Visual Studio 2026), like the net462 build itself, so it is not part of PdfUtil.sln. Open this project directly,
-    or run: dotnet build samples/PdfUtil.WinFormsSample
+    (Visual Studio 2026), like the net462 build itself. With an older SDK the libraries have no net462 build, so this
+    project then builds only OldSdk/Program.cs, which says what is needed, and the rest of PdfUtil.sln still builds.
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -11,9 +11,15 @@
     <RootNamespace>PdfUtil.WinFormsSample</RootNamespace>
     <AssemblyName>PdfUtil.WinFormsSample</AssemblyName>
     <IsPackable>false</IsPackable>
+    <PdfUtilNetFramework Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(MSBuildVersion)', '18.0'))">true</PdfUtilNetFramework>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(PdfUtilNetFramework)' != 'true'">
+    <Compile Remove="*.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PdfUtilNetFramework)' == 'true'">
+    <Compile Remove="OldSdk/**" />
     <ProjectReference Include="../../src/PdfUtil/PdfUtil.csproj" />
     <ProjectReference Include="../../src/PdfUtil.Signatures/PdfUtil.Signatures.csproj" />
     <ProjectReference Include="../../src/PdfUtil.Conversion/PdfUtil.Conversion.csproj" />

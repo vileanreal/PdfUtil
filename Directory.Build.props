@@ -30,7 +30,7 @@
     <PdfUtilTestTargetFrameworks>net8.0;net48</PdfUtilTestTargetFrameworks>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$(TargetFramework.StartsWith('net4'))">
+  <PropertyGroup Condition="$(TargetFramework.StartsWith('net4')) And $([MSBuild]::VersionGreaterThanOrEquals('$(MSBuildVersion)', '18.0'))">
     <LangVersion>14.0</LangVersion>
     <!-- The .NET Framework reference assemblies carry no nullable annotations; net8.0 does the checking. -->
     <Nullable>annotations</Nullable>
