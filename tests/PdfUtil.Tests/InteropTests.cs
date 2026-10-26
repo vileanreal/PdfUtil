@@ -227,8 +227,11 @@ public class InteropTests
                 foreach (var password in new[] { s.User, s.Owner })
                 {
                     var (code, output) = TestHelpers.Run(qpdf, "--check", "--password=" + password, path);
-                    Assert.True(code == 0, $"qpdf --check failed for {s.Name}: {output}");
-                    Assert.Contains("No syntax or stream encoding errors", output, StringComparison.Ordinal);
+                    Assert.True(code == 0 || OnlyFakeJpegWarnings(code, output), $"qpdf --check failed for {s.Name}: {output}");
+                    if (code == 0)
+                    {
+                        Assert.Contains("No syntax or stream encoding errors", output, StringComparison.Ordinal);
+                    }
                 }
 
                 if (s.Encrypted && s.User.Length > 0)
@@ -242,6 +245,20 @@ public class InteropTests
         {
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// qpdf 11 decodes JPEG streams during --check. The test builder's images are random bytes under DCTDecode (a
+    /// pass-through filter for PdfUtil), so qpdf warns about them and exits with 3 ("succeeded with warnings"). Those
+    /// warnings are accepted; any other warning is not.
+    /// </summary>
+    private static bool OnlyFakeJpegWarnings(int code, string output)
+    {
+        var warnings = output.Split('\n').Where(l => l.StartsWith("WARNING:", StringComparison.Ordinal)).ToList();
+        return code == 3 && warnings.Count > 0 && warnings.All(w =>
+            w.Contains("Not a JPEG file", StringComparison.Ordinal)
+            || w.Contains("JPEG datastream contains no image", StringComparison.Ordinal)
+            || w.Contains("stream will be re-processed without filtering", StringComparison.Ordinal));
     }
 
     [RequiresToolFact("mutool")]

@@ -83,6 +83,9 @@ internal sealed class PdfDocument : IDisposable
     /// <summary>Whether the latest cross-reference section is a cross-reference stream (not a table or a hybrid table).</summary>
     public bool LatestSectionIsStream { get; private set; }
 
+    /// <summary>The <c>/XRefStm</c> offset of the latest section, when it is a hybrid table whose stream was read.</summary>
+    public long? LatestXrefStm { get; private set; }
+
     public bool HasXrefStreams { get; private set; }
 
     public bool HasObjectStreams { get; private set; }
@@ -297,6 +300,11 @@ internal sealed class PdfDocument : IDisposable
                         foreach (var (num, entry) in hidden.Entries)
                         {
                             _xref.TryAdd(num, entry);
+                        }
+
+                        if (XrefSectionCount == 1)
+                        {
+                            LatestXrefStm = xrefStm.Value;
                         }
                     }
                 }

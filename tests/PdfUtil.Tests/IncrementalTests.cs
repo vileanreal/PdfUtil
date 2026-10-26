@@ -61,6 +61,29 @@ public class IncrementalTests
     }
 
     [Fact]
+    public void Hybrid_UpdateTrailerRepeatsXRefStm()
+    {
+        // The catalog and pages of the hybrid test file are in an object stream, listed only in its /XRefStm stream.
+        // MuPDF reads /XRefStm from the latest trailer only, so without it the update loses the page tree there.
+        var input = new TestPdfBuilder { Mode = XrefMode.Hybrid }.Build();
+        using var source = TestHelpers.Open(input);
+        Assert.NotNull(source.LatestXrefStm);
+
+        var once = Pdf.EditInfo(input, Incremental(), out _);
+        var twice = Pdf.EditInfo(once, Incremental(new PdfInfoChanges { Author = "Second" }), out _);
+        foreach (var output in new[] { once, twice })
+        {
+            using var doc = TestHelpers.Open(output);
+            Assert.Equal(source.LatestXrefStm, doc.LatestXrefStm);
+            var tail = Encoding.Latin1.GetString(output, input.Length, output.Length - input.Length);
+            Assert.Contains($"/XRefStm {source.LatestXrefStm}", tail, StringComparison.Ordinal);
+        }
+
+        AssertAppended(once, twice);
+        Assert.Equal("Second", Pdf.GetInfo(twice).Info!.Author);
+    }
+
+    [Fact]
     public void EditInfo_IsMuchSmallerThanARewrite_AndTwoUpdatesChain()
     {
         var input = new TestPdfBuilder { Rich = true }.Build();

@@ -248,6 +248,14 @@ internal sealed class IncrementalEngine
                     full[e.Key] = e.Value;
                 }
 
+                // A hybrid file's objects in compressed object streams are listed only in its /XRefStm stream.
+                // Readers such as MuPDF look for it in the latest trailer only, so the update repeats it; the
+                // update's own table entries still take precedence.
+                if (doc.LatestXrefStm is long xrefStm)
+                {
+                    full[PdfName.XRefStm] = new PdfInteger(xrefStm);
+                }
+
                 writer.WriteIncrementalXrefTable(full);
             }
 
