@@ -79,10 +79,40 @@ PdfDocumentInfo d = await inspector.GetInfoAsync(stream, password: null);
 services.AddLogging();
 services.AddPdfUtil(o => o.MaxDecompressedStreamBytes = 64 * 1024 * 1024);
 // inject IPdfProtector, IPdfEditor, IPdfOpener, IPdfInspector, IPdfAnalyzer, IPdfCleaner,
-// IPdfAttachmentManager, IPdfPageEditor, IPdfTextExtractor, IPdfStamper and IPdfBatchProcessor (singletons)
+// IPdfAttachmentManager, IPdfPageEditor, IPdfTextExtractor, IPdfStamper, IPdfBatchProcessor
+// and IPdfPipelineFactory (singletons)
 ```
 
 When an `ILoggerFactory` is registered, the library's log callback is bridged to an `ILogger` with category `PdfUtil`. Log messages never contain passwords, keys or document content.
+
+### Chaining operations (PdfPipeline)
+
+`PdfPipeline` runs several operations on one document, each step reading the previous step's output. Nothing runs until a terminal method (`ToBytesAsync`, `ToStreamAsync`, `SaveAsync` or `RunAsync`) is called.
+
+```csharp
+byte[] pdf = await PdfPipeline.FromFile("report.pdf")
+    .Watermark("CONFIDENTIAL")
+    .RotatePages(90, "1-2")
+    .EditInfo(i => i.Title = "Q3 report")
+    .Protect(userPassword: "open-me", ownerPassword: "owner")
+    .ToBytesAsync();
+
+// Or save atomically and look at what each step did.
+var result = await PdfPipeline.FromBytes(pdf)
+    .WithPassword("owner")                 // opens the protected input
+    .AddAttachment("data.csv", csvBytes)
+    .Decrypt()
+    .SaveAsync("report-final.pdf");
+foreach (var step in result.Steps)
+    Console.WriteLine($"{step.Name}: {step.Result}");
+```
+
+* **Sources:** `FromFile`, `FromBytes`, `FromStream`, each with optional `PdfUtilOptions`. With DI, inject `IPdfPipelineFactory`, which uses the application's options.
+* **Steps:** `Stamp` / `Watermark`, `Protect`, `Decrypt`, `ChangeSecurity`, `EditInfo`, `RotatePages`, `DeletePages`, `Append` (merge other documents after this one), `Repair`, `Sanitize`, `AddAttachment`, `RemoveAttachment`, and `Then(name, step)` for your own step. `PdfUtil.Signatures` adds `.Sign(options)`; make it the last step, because any later change invalidates the signature, and it cannot follow `Protect`.
+* **Passwords carry forward:** `WithPassword` opens the input. After `Protect` or `ChangeSecurity`, later steps open the result with the new owner password, and after `Decrypt` they need none. A password set on a step's own options wins. Your options objects are left unchanged.
+* **Order matters:** put `Protect` at the end, so the earlier steps don't each decrypt and re-encrypt the document. `Append` returns an unprotected document.
+* **Safety:** every step keeps its own self-verification. If a step fails, its exception propagates with its original type, `ex.Data["PdfPipelineStep"]` names the step (for example `"2: DeletePages"`), and nothing is written. `SaveAsync` replaces the file atomically, so the input file can also be the output.
+* Intermediate documents are kept in memory. A pipeline can run more than once; each run reads the input again.
 
 ## Supported input
 

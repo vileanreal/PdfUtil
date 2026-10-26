@@ -205,3 +205,15 @@ Code paths are relative to `src/PdfUtil/`, and tests are in `tests/PdfUtil.Tests
 | Human output by default, `--json` for machines | `CliApp.RunAsync`, `Human` | `Protect_Decrypt_PasswordSources_AndExitCodes`, `Batch_ManyFiles` |
 | Exit codes 0–6 | `CliApp.ExitCode` | every CLI test |
 | Tests in-process and as a process | | `CliTests` (in-process), `Process_RunsTheTool` |
+
+## Chaining operations (PdfPipeline)
+
+Added after the roadmap, on request; purely additive.
+
+| Requirement | Code | Test |
+|---|---|---|
+| Fluent, lazy pipeline over one document: stamp/watermark, protect, decrypt, change security, edit info, rotate, delete pages, append (merge), repair, sanitize, attachments, custom steps | `PdfPipeline.cs` | `PipelineTests.Watermark_Rotate_EditInfo_Protect`, `Append_DeletePages_Repair_Sanitize`, `Then_CustomStep_GetsCurrentPassword` |
+| Passwords carry forward (`WithPassword`, new owner password after `Protect`/`ChangeSecurity`, none after `Decrypt`); caller options unchanged | `PdfPipeline.WithOpenPassword`, `Protect`, `ChangeSecurity`, `Decrypt` | `OwnerPassword_CarriesForward_WithoutChangingOptions`, `WithPassword_OpensProtectedInput_AndDecryptRemovesIt`, `ChangeSecurity_NewOwnerPassword_IsUsedNext`, `WrongPassword_FailsInFirstStep` |
+| Failing step keeps its exception type, is named in `Data["PdfPipelineStep"]`, nothing is written; atomic save; cancellation; reruns | `PdfPipeline.RunAsync`, `SaveAsync` (`OutputRunner.CommitFile`) | `FailingStep_KeepsExceptionType_NamesStep_AndWritesNothing`, `Save_File_Stream_AndRunsTwice`, `Cancellation_StopsBeforeRunning` |
+| `Sign` step in PdfUtil.Signatures | `PdfPipelineSignatures.Sign` | `Sign_AsLastStep_IsValid` |
+| `IPdfPipelineFactory` registered by `AddPdfUtil` with the application's options | `PdfPipelineFactory`, `PdfUtilServiceCollectionExtensions` | `Factory_FromDependencyInjection_UsesApplicationOptions` |

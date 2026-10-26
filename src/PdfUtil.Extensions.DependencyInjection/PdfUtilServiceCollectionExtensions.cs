@@ -46,6 +46,7 @@ public static class PdfUtilServiceCollectionExtensions
         services.TryAddSingleton<IPdfPageEditor>(sp => new PdfPageEditor(sp.GetRequiredService<PdfUtilOptions>()));
         services.TryAddSingleton<IPdfTextExtractor>(sp => new PdfTextExtractor(sp.GetRequiredService<PdfUtilOptions>()));
         services.TryAddSingleton<IPdfStamper>(sp => new PdfStamper(sp.GetRequiredService<PdfUtilOptions>()));
+        services.TryAddSingleton<IPdfPipelineFactory>(sp => new PdfPipelineFactory(sp.GetRequiredService<PdfUtilOptions>()));
         services.TryAddSingleton<IPdfBatchProcessor>(sp => new PdfBatchProcessor(
             sp.GetRequiredService<IPdfProtector>(),
             sp.GetRequiredService<IPdfEditor>(),
