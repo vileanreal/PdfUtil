@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A Windows Forms app on .NET Framework 4.8 that checks the net462 build of PdfUtil. It needs the .NET 10 SDK
+    (Visual Studio 2026), like the net462 build itself, so it is not part of PdfUtil.sln. Open this project directly,
+    or run: dotnet build samples/PdfUtil.WinFormsSample
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>PdfUtil.WinFormsSample</RootNamespace>
+    <AssemblyName>PdfUtil.WinFormsSample</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/PdfUtil/PdfUtil.csproj" />
+    <ProjectReference Include="../../src/PdfUtil.Signatures/PdfUtil.Signatures.csproj" />
+    <ProjectReference Include="../../src/PdfUtil.Conversion/PdfUtil.Conversion.csproj" />
+    <ProjectReference Include="../../src/PdfUtil.Extensions.DependencyInjection/PdfUtil.Extensions.DependencyInjection.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+
+</Project>
