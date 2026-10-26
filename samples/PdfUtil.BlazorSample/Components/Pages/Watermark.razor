@@ -1,0 +1,175 @@
+@page "/watermark"
+@inherits OperationPage
+@inject IPdfStamper Stamper
+@using System.Globalization
+
+<PageTitle>Watermark · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Watermark</h1>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <PdfFileInput File="_file" FileChanged="OnFileChanged" Disabled="Busy" />
+        <PasswordInput Label="Password (if protected)" @bind-Value="_password" Disabled="Busy" AutoComplete="current-password" Help="The protection is kept." />
+
+        <ul class="nav nav-tabs mb-3">
+            <li class="nav-item"><button class="nav-link @(_useImage ? "" : "active")" @onclick="() => _useImage = false">Text</button></li>
+            <li class="nav-item"><button class="nav-link @(_useImage ? "active" : "")" @onclick="() => _useImage = true">Image</button></li>
+        </ul>
+        @if (_useImage)
+        {
+            <FileUpload Label="PNG or JPEG image" Accept=".png,.jpg,.jpeg,image/png,image/jpeg" @bind-File="_image" Disabled="Busy" />
+            <div class="mb-3">
+                <label class="form-label" for="imgw">Width in points (empty: the image's own size)</label>
+                <input id="imgw" type="number" class="form-control" @bind="_imageWidth" @bind:event="oninput" disabled="@Busy" />
+            </div>
+        }
+        else
+        {
+            <div class="mb-3">
+                <label class="form-label fw-semibold" for="text">Text</label>
+                <textarea id="text" class="form-control" rows="2" @bind="_text" @bind:event="oninput" disabled="@Busy"></textarea>
+            </div>
+            <FileUpload Label="TrueType font (optional, for any script)" Accept=".ttf,.ttc" @bind-File="_font" Disabled="Busy"
+                        Help="Without a font, the standard Helvetica font is used, which covers Western European text." />
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <label class="form-label" for="size">Font size: @_fontSize pt</label>
+                    <input id="size" type="range" class="form-range" min="8" max="144" @bind="_fontSize" @bind:event="oninput" disabled="@Busy" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label" for="color">Colour</label>
+                    <input id="color" type="color" class="form-control form-control-color" @bind="_color" @bind:event="oninput" disabled="@Busy" />
+                </div>
+            </div>
+        }
+
+        <div class="row g-2 mb-3">
+            <div class="col-6">
+                <label class="form-label" for="opacity">Opacity: @((int)(_opacity * 100))%</label>
+                <input id="opacity" type="range" class="form-range" min="0.05" max="1" step="0.05" @bind="_opacity" @bind:event="oninput" disabled="@Busy" />
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="rotation">Rotation: @_rotation°</label>
+                <input id="rotation" type="range" class="form-range" min="-180" max="180" step="5" @bind="_rotation" @bind:event="oninput" disabled="@Busy" />
+            </div>
+        </div>
+        <div class="row g-2 mb-3">
+            <div class="col-6">
+                <label class="form-label" for="position">Position</label>
+                <select id="position" class="form-select" @bind="_position" disabled="@Busy">
+                    @foreach (var p in Enum.GetValues<PdfStampPosition>().Where(p => p != PdfStampPosition.Custom))
+                    {
+                        <option value="@p">@System.Text.RegularExpressions.Regex.Replace(p.ToString(), "(?<=[a-z])(?=[A-Z])", " ").ToLowerInvariant().Replace("center", "centre", StringComparison.Ordinal) switch { var t => char.ToUpperInvariant(t[0]) + t[1..] }</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="form-label" for="pages">Pages</label>
+                <input id="pages" class="form-control" @bind="_range" disabled="@Busy" placeholder="all" />
+            </div>
+        </div>
+        <Check Id="under" Label="Behind the page content" @bind-Value="_under" Disabled="Busy" />
+        <button class="btn btn-primary mt-3" @onclick="StampAsync" disabled="@(Busy || _file is null || (_useImage ? _image is null : string.IsNullOrWhiteSpace(_text)))">Add watermark</button>
+        <ProgressDisplay Progress="CurrentProgress" />
+    </div>
+
+    <div class="col-lg-3">
+        <div class="small text-muted mb-2">Preview (an A4 page)</div>
+        <div class="border bg-white position-relative overflow-hidden shadow-sm" style="width: 100%; aspect-ratio: 595 / 842; container-type: inline-size">
+            <div class="position-absolute text-muted" style="left: 9%; right: 9%; top: 8%; font-size: 2.2cqw; line-height: 1.6; z-index: @(_under ? 2 : 0)">
+                @for (var i = 0; i < 26; i++)
+                {
+                    <div style="background: #e9ecef; height: 1.1cqw; margin-bottom: 1.4cqw; width: @(70 + ((i * 37) % 30))%"></div>
+                }
+            </div>
+            <div class="position-absolute" style="@PreviewStyle()">
+                @if (_useImage)
+                {
+                    @if (_image is not null)
+                    {
+                        <img src="@($"data:image/{(_image.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? "png" : "jpeg")};base64,{System.Convert.ToBase64String(_image.Bytes)}")" style="width: @Cqw(_imageWidth ?? 150)cqw" alt="" />
+                    }
+                }
+                else
+                {
+                    <div style="white-space: pre; font-family: Helvetica, Arial, sans-serif; font-size: @Cqw(_fontSize)cqw; color: @_color; text-align: center; line-height: 1.2">@_text</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null && _output is not null)
+        {
+            <OperationResult Title="Watermarked" FileName="@OutputName(_file!, "-watermarked")" Data="_output" Warnings="_result.Warnings"
+                             Details="@(new[] { ("Pages stamped", _result.StampedPages.Count.ToString()) })" />
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private UploadedPdf? _image;
+    private UploadedPdf? _font;
+    private string? _password;
+    private bool _useImage;
+    private string _text = "CONFIDENTIAL";
+    private int _fontSize = 48;
+    private string _color = "#808080";
+    private double _opacity = 0.3;
+    private int _rotation = 45;
+    private double? _imageWidth;
+    private PdfStampPosition _position = PdfStampPosition.Center;
+    private string? _range;
+    private bool _under;
+    private PdfStampResult? _result;
+    private byte[]? _output;
+
+    private void OnFileChanged(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        _output = null;
+        Error = null;
+    }
+
+    /// <summary>Points to a percentage of the preview's width (an A4 page is 595 points wide).</summary>
+    private static string Cqw(double points) => (points / 595 * 100).ToString("0.###", CultureInfo.InvariantCulture);
+
+    private string PreviewStyle()
+    {
+        var name = _position.ToString();
+        var x = name.EndsWith("Left", StringComparison.Ordinal) ? "6%" : name.EndsWith("Right", StringComparison.Ordinal) ? "94%" : "50%";
+        var y = name.StartsWith("Top", StringComparison.Ordinal) ? "6%" : name.StartsWith("Bottom", StringComparison.Ordinal) ? "94%" : "50%";
+        var tx = x == "6%" ? "0%" : x == "94%" ? "-100%" : "-50%";
+        var ty = y == "6%" ? "0%" : y == "94%" ? "-100%" : "-50%";
+        return FormattableString.Invariant($"left: {x}; top: {y}; transform: translate({tx}, {ty}) rotate({-_rotation}deg); opacity: {_opacity}; z-index: 1");
+    }
+
+    private Task StampAsync() => RunAsync(async (ct, progress) =>
+    {
+        var options = new PdfStampOptions
+        {
+            Text = _useImage ? null : _text,
+            Image = _useImage ? _image!.Bytes : null,
+            ImageWidth = _useImage ? _imageWidth : null,
+            FontData = _useImage ? null : _font?.Bytes,
+            FontSize = _fontSize,
+            Color = PdfColor.FromHex(_color),
+            Opacity = _opacity,
+            Rotation = _rotation,
+            Position = _position,
+            Layer = _under ? PdfStampLayer.Under : PdfStampLayer.Over,
+            Pages = string.IsNullOrWhiteSpace(_range) ? null : PdfPageRange.Parse(_range),
+            Password = Optional(_password),
+            Progress = progress,
+        };
+        (_result, _output) = await Produce(_file!, (input, output) => Stamper.StampAsync(input, output, options, ct));
+    });
+}

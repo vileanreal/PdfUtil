@@ -1,0 +1,14 @@
+@* A labelled checkbox bound to a bool. *@
+
+<div class="form-check">
+    <input class="form-check-input" type="checkbox" id="@Id" checked="@Value" disabled="@Disabled" @onchange="e => ValueChanged.InvokeAsync((bool)e.Value!)" />
+    <label class="form-check-label" for="@Id">@Label</label>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public bool Value { get; set; }
+    [Parameter] public EventCallback<bool> ValueChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+}

@@ -1,0 +1,102 @@
+@page "/split"
+@inherits OperationPage
+@inject IPdfPageEditor Editor
+@inject IJSRuntime JS
+
+<PageTitle>Split · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Split</h1>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <PdfFileInput File="_file" FileChanged="OnFileChanged" Disabled="Busy" />
+        <PasswordInput Label="Password (if protected)" @bind-Value="_password" Disabled="Busy" AutoComplete="current-password"
+                       Help="The parts are written without protection, so the owner password is needed." />
+        <div class="mb-3">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" id="every" checked="@_byCount" @onchange="() => _byCount = true" disabled="@Busy" />
+                <label class="form-check-label" for="every">Every <input type="number" min="1" class="form-control form-control-sm d-inline-block mx-1" style="width: 5rem" @bind="_every" disabled="@(Busy || !_byCount)" /> pages</label>
+            </div>
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="radio" id="ranges" checked="@(!_byCount)" @onchange="() => _byCount = false" disabled="@Busy" />
+                <label class="form-check-label" for="ranges">These parts, one page range per line</label>
+            </div>
+            <textarea class="form-control mt-2" rows="4" @bind="_ranges" disabled="@(Busy || _byCount)" placeholder="1-3&#10;4-10&#10;11-"></textarea>
+        </div>
+        <button class="btn btn-primary" @onclick="SplitAsync" disabled="@(Busy || _file is null)">Split</button>
+        <ProgressDisplay Progress="CurrentProgress" />
+    </div>
+
+    <div class="col-lg-5">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null)
+        {
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">@_parts.Count parts</div>
+                <ul class="list-group list-group-flush">
+                    @foreach (var (part, data) in _parts)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span class="small">Part @part.Number: pages @Pages(part.Pages) · @PdfFileInput.FormatSize(data.Length)</span>
+                            <button class="btn btn-outline-success btn-sm" @onclick="() => OperationResult.Download(JS, Name(part), data)">Download</button>
+                        </li>
+                    }
+                </ul>
+                @foreach (var warning in _result.Warnings)
+                {
+                    <div class="alert alert-warning py-2 small m-2">@warning</div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private string? _password;
+    private bool _byCount = true;
+    private int _every = 1;
+    private string? _ranges;
+    private PdfSplitResult? _result;
+    private List<(PdfSplitPart Part, byte[] Data)> _parts = new();
+
+    private void OnFileChanged(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        _parts.Clear();
+        Error = null;
+    }
+
+    private static string Pages(IReadOnlyList<int> pages) => pages.Count == 1 ? pages[0].ToString() : $"{pages[0]}–{pages[^1]}";
+
+    private string Name(PdfSplitPart part) => OutputName(_file!, "-part" + part.Number);
+
+    private Task SplitAsync() => RunAsync(async (ct, progress) =>
+    {
+        var options = new PdfSplitOptions
+        {
+            EveryNPages = _byCount ? Math.Max(1, _every) : null,
+            Ranges = _byCount ? null : (_ranges ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(PdfPageRange.Parse).ToList(),
+            Password = Optional(_password),
+            Progress = progress,
+        };
+        var file = _file!;
+        var buffers = new List<(PdfSplitPart, MemoryStream)>();
+        _result = await Task.Run(async () =>
+        {
+            using var input = file.OpenRead();
+            return await Editor.SplitAsync(input, options, part =>
+            {
+                var buffer = new MemoryStream();
+                buffers.Add((part, buffer));
+                return buffer;
+            }, ct);
+        });
+        _parts = buffers.Select(b => (b.Item1, b.Item2.ToArray())).ToList();
+    });
+}

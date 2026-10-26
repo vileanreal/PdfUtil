@@ -1,0 +1,84 @@
+@page "/pages"
+@inherits OperationPage
+@inject IPdfPageEditor Editor
+
+<PageTitle>Rotate or delete pages · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Rotate or delete pages</h1>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <PdfFileInput File="_file" FileChanged="OnFileChanged" Disabled="Busy" />
+        <PasswordInput Label="Password (if protected)" @bind-Value="_password" Disabled="Busy" AutoComplete="current-password"
+                       Help="The protection is kept." />
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="range">Pages</label>
+            <input id="range" class="form-control" @bind="_range" @bind:event="oninput" disabled="@Busy" placeholder="all" />
+            <div class="form-text">For example <code>1-3,5</code>, <code>odd</code>, <code>even</code>, <code>last</code> or <code>4-</code>. Empty means every page.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="angle">Rotate by</label>
+            <select id="angle" class="form-select" @bind="_angle" disabled="@Busy">
+                <option value="90">90° clockwise</option>
+                <option value="180">180°</option>
+                <option value="270">90° counter-clockwise</option>
+            </select>
+        </div>
+        <Check Id="objstm" Label="Smaller file (compressed object streams)" @bind-Value="_objectStreams" Disabled="Busy" />
+        <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-primary" @onclick="RotateAsync" disabled="@(Busy || _file is null)">Rotate</button>
+            <button class="btn btn-outline-danger" @onclick="DeleteAsync" disabled="@(Busy || _file is null || string.IsNullOrWhiteSpace(_range))">Delete these pages</button>
+        </div>
+        <ProgressDisplay Progress="CurrentProgress" />
+    </div>
+
+    <div class="col-lg-5">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null && _output is not null)
+        {
+            <OperationResult Title="@_title" FileName="@OutputName(_file!, "-pages")" Data="_output" Warnings="_result.Warnings"
+                             Details="@(new[] { ("Pages before", _result.SourcePageCount.ToString()), ("Pages after", _result.PageCount.ToString()) })" />
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private string? _password;
+    private string? _range;
+    private int _angle = 90;
+    private bool _objectStreams;
+    private PdfPageEditResult? _result;
+    private byte[]? _output;
+    private string _title = "";
+
+    private void OnFileChanged(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        _output = null;
+        Error = null;
+    }
+
+    private PdfPageRange? Range() => string.IsNullOrWhiteSpace(_range) ? null : PdfPageRange.Parse(_range);
+
+    private PdfWriteOptions? Write() => _objectStreams ? new PdfWriteOptions { UseObjectStreams = true } : null;
+
+    private Task RotateAsync() => RunAsync(async (ct, progress) =>
+    {
+        var options = new PdfRotatePagesOptions { Angle = _angle, Pages = Range(), Password = Optional(_password), Write = Write(), Progress = progress };
+        (_result, _output) = await Produce(_file!, (input, output) => Editor.RotatePagesAsync(input, output, options, ct));
+        _title = "Pages rotated";
+    });
+
+    private Task DeleteAsync() => RunAsync(async (ct, progress) =>
+    {
+        var options = new PdfDeletePagesOptions { Pages = Range(), Password = Optional(_password), Write = Write(), Progress = progress };
+        (_result, _output) = await Produce(_file!, (input, output) => Editor.DeletePagesAsync(input, output, options, ct));
+        _title = "Pages deleted";
+    });
+}

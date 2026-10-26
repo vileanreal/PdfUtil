@@ -1,0 +1,18 @@
+# Build output
+bin/
+obj/
+*.nupkg
+*.snupkg
+
+# IDE and OS files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+
+# Test and tool output
+TestResults/
+*.trx
+node_modules/

@@ -1,0 +1,179 @@
+@page "/security"
+@inherits OperationPage
+@inject IPdfEditor Editor
+@inject IPdfInspector Inspector
+
+<PageTitle>Change security · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Change security</h1>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <PdfFileInput Label="Protected PDF" File="_file" FileChanged="OnFileChangedAsync" Disabled="Busy" />
+        @if (_current is not null)
+        {
+            <div class="alert alert-secondary py-2 small">Current protection: @_current</div>
+        }
+
+        <PasswordInput Label="Current owner password" @bind-Value="_currentOwnerPassword" Disabled="Busy" AutoComplete="current-password" />
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="keepUser" @bind="_keepUserPassword" disabled="@Busy" />
+                    <label class="form-check-label" for="keepUser">Keep the current password to open</label>
+                </div>
+                @if (!_keepUserPassword)
+                {
+                    <PasswordInput Label="New password to open" @bind-Value="_userPassword" Disabled="Busy" Help="Leave empty to let anyone open the file." />
+                }
+                else
+                {
+                    <div class="form-text mb-2">For AES-256 files the current password to open can only be kept when it is empty; otherwise enter it again as a new password.</div>
+                }
+
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="keepOwner" @bind="_keepOwnerPassword" disabled="@Busy" />
+                    <label class="form-check-label" for="keepOwner">Keep the current owner password</label>
+                </div>
+                @if (!_keepOwnerPassword)
+                {
+                    <PasswordInput Label="New owner password" @bind-Value="_ownerPassword" Disabled="Busy" />
+                }
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="algorithm">Algorithm</label>
+            <select id="algorithm" class="form-select" @bind="_algorithm" disabled="@Busy">
+                <option value="">Keep the current algorithm</option>
+                <option value="@PdfEncryptionAlgorithm.Aes256">AES-256 (recommended)</option>
+                <option value="@PdfEncryptionAlgorithm.Aes128">AES-128</option>
+                <option value="@PdfEncryptionAlgorithm.Rc4_128">RC4-128 (legacy, weak)</option>
+            </select>
+        </div>
+
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="keepPermissions" @bind="_keepPermissions" disabled="@Busy" />
+            <label class="form-check-label" for="keepPermissions">Keep the current permissions</label>
+        </div>
+        @if (!_keepPermissions)
+        {
+            <PermissionsPicker @bind-Value="_permissions" Label="New permissions" Disabled="Busy" />
+        }
+
+        <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-primary" @onclick="ChangeAsync" disabled="@(Busy || _file is null)">
+                @if (Busy)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                }
+                Apply
+            </button>
+            @if (Busy)
+            {
+                <button class="btn btn-outline-secondary" @onclick="Cancel">Cancel</button>
+            }
+        </div>
+        <ProgressDisplay Progress="CurrentProgress" />
+    </div>
+
+    <div class="col-lg-5">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null && _output is not null)
+        {
+            <OperationResult Title="Security changed" FileName="@_outputName" Data="_output" Details="ResultDetails()" Warnings="_result.Warnings" />
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private string? _current;
+    private string? _currentOwnerPassword;
+    private bool _keepUserPassword = true;
+    private bool _keepOwnerPassword = true;
+    private bool _keepPermissions = true;
+    private string? _userPassword;
+    private string? _ownerPassword;
+    private PdfEncryptionAlgorithm? _algorithm;
+    private PdfPermissions _permissions = PermissionsPicker.Default;
+    private PdfProtectionResult? _result;
+    private byte[]? _output;
+    private string _outputName = "";
+
+    private IReadOnlyList<(string, string)> ResultDetails() => new List<(string, string)>
+    {
+        ("Algorithm", $"{_result!.Algorithm} (revision {_result.Revision})"),
+        ("PDF version", $"{_result.SourceVersion} → {_result.OutputVersion}"),
+    };
+
+    private async Task OnFileChangedAsync(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        _output = null;
+        _current = null;
+        Error = null;
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var info = await Task.Run(async () =>
+            {
+                using var stream = file.OpenRead();
+                return await Inspector.GetInfoAsync(stream);
+            });
+            _current = info.Encryption is { } e
+                ? $"{e.Algorithm} (revision {e.R}), permissions: {(e.Permissions == PdfPermissions.None ? "none" : e.Permissions.ToString())}"
+                : "none — this PDF is not protected.";
+            if (info.Encryption is { } enc)
+            {
+                _permissions = enc.Permissions;
+            }
+        }
+        catch (Exception ex) when (ErrorMessages.IsExpected(ex))
+        {
+            _current = null;
+        }
+    }
+
+    private Task ChangeAsync()
+    {
+        var file = _file;
+        if (file is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        _result = null;
+        _output = null;
+        return RunAsync(async (ct, progress) =>
+        {
+            var changes = new PdfSecurityChanges
+            {
+                CurrentOwnerPassword = _currentOwnerPassword ?? "",
+                UserPassword = _keepUserPassword ? null : _userPassword ?? "",
+                OwnerPassword = _keepOwnerPassword ? null : _ownerPassword,
+                Algorithm = _algorithm,
+                Permissions = _keepPermissions ? null : _permissions,
+                Progress = progress,
+            };
+            (_result, _output) = await Task.Run(async () =>
+            {
+                using var input = file.OpenRead();
+                using var buffer = new MemoryStream();
+                var r = await Editor.ChangeSecurityAsync(input, buffer, changes, ct);
+                return (r, buffer.ToArray());
+            });
+            _outputName = Path.GetFileNameWithoutExtension(file.Name) + "-resecured.pdf";
+        });
+    }
+}

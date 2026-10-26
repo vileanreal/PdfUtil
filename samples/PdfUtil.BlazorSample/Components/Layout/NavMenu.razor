@@ -1,0 +1,108 @@
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">PdfUtil sample</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+        <div class="nav-section">Security</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="protect">
+                <span class="bi bi-lock-nav-menu" aria-hidden="true"></span> Protect
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="decrypt">
+                <span class="bi bi-unlock-nav-menu" aria-hidden="true"></span> Remove protection
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="security">
+                <span class="bi bi-shield-nav-menu" aria-hidden="true"></span> Change security
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="verify">
+                <span class="bi bi-key-nav-menu" aria-hidden="true"></span> Verify password
+            </NavLink>
+        </div>
+        <div class="nav-section">Documents</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="inspect">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Inspect
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="validate">
+                <span class="bi bi-check2-square-nav-menu" aria-hidden="true"></span> Validate and repair
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="edit-info">
+                <span class="bi bi-pencil-nav-menu" aria-hidden="true"></span> Edit info
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="sanitize">
+                <span class="bi bi-eraser-nav-menu" aria-hidden="true"></span> Sanitize
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="attachments">
+                <span class="bi bi-paperclip-nav-menu" aria-hidden="true"></span> Attachments
+            </NavLink>
+        </div>
+        <div class="nav-section">Pages</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="pages">
+                <span class="bi bi-files-nav-menu" aria-hidden="true"></span> Rotate or delete
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="merge">
+                <span class="bi bi-intersect-nav-menu" aria-hidden="true"></span> Merge
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="split">
+                <span class="bi bi-scissors-nav-menu" aria-hidden="true"></span> Split
+            </NavLink>
+        </div>
+        <div class="nav-section">Content</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="text">
+                <span class="bi bi-fonts-nav-menu" aria-hidden="true"></span> Extract text
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="watermark">
+                <span class="bi bi-droplet-nav-menu" aria-hidden="true"></span> Watermark
+            </NavLink>
+        </div>
+        <div class="nav-section">Signatures</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="sign">
+                <span class="bi bi-vector-pen-nav-menu" aria-hidden="true"></span> Sign
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="verify-signatures">
+                <span class="bi bi-patch-check-nav-menu" aria-hidden="true"></span> Verify signatures
+            </NavLink>
+        </div>
+        <div class="nav-section">Conversion</div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="convert">
+                <span class="bi bi-arrow-left-right-nav-menu" aria-hidden="true"></span> Convert
+            </NavLink>
+        </div>
+    </nav>
+</div>

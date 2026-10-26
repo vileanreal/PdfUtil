@@ -1,0 +1,260 @@
+@page "/inspect"
+@using System.Globalization
+@inject IPdfAnalyzer Analyzer
+@inject IPdfAttachmentManager Attachments
+@inject IJSRuntime JS
+
+<PageTitle>Inspect a PDF · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Inspect a PDF</h1>
+
+<div class="row">
+    <div class="col-lg-7">
+        <PdfFileInput @bind-File="_file" Disabled="_busy" />
+        <PasswordInput Label="Password (optional)" @bind-Value="_password" Disabled="_busy" AutoComplete="current-password"
+                       Help="Needed to read pages and metadata of a protected file." />
+        <div class="mb-3">
+            <span class="form-label fw-semibold d-block">Details to read</span>
+            @foreach (var detail in AllDetails)
+            {
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="detail-@detail" checked="@_details.HasFlag(detail)" disabled="@_busy"
+                           @onchange="e => _details = (bool)e.Value! ? _details | detail : _details & ~detail" />
+                    <label class="form-check-label" for="detail-@detail">@Words(detail.ToString())</label>
+                </div>
+            }
+        </div>
+        <button class="btn btn-primary" @onclick="InspectAsync" disabled="@(_busy || _file is null)">
+            @if (_busy)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+            }
+            Read details
+        </button>
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger mt-4" role="alert">@_error</div>
+        }
+    </div>
+</div>
+
+@if (_info is not null)
+{
+    @if (_info.RequiresPassword)
+    {
+        <div class="alert alert-info mt-4">This PDF is password protected. Enter its password to see pages and metadata.</div>
+    }
+
+    <div class="row g-4 mt-1">
+        @if (_info.Attachments.Count > 0)
+        {
+            <div class="col-xl-6">
+                <div class="card h-100">
+                    <div class="card-header fw-semibold">Attachments</div>
+                    <ul class="list-group list-group-flush">
+                        @foreach (var attachment in _info.Attachments)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                                <span class="text-break small">@attachment</span>
+                                @if (attachment.Page is null)
+                                {
+                                    <button class="btn btn-outline-primary btn-sm" @onclick="() => DownloadAttachmentAsync(attachment.Name)">Download</button>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        @foreach (var card in _sections.Where(s => s.Rows.Count > 0))
+        {
+            <div class="col-xl-6">
+                <div class="card h-100">
+                    <div class="card-header fw-semibold">@card.Title</div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                @foreach (var (name, value) in card.Rows)
+                                {
+                                    <tr>
+                                        <th class="ps-3 fw-normal text-muted w-40">@name</th>
+                                        <td class="pe-3 text-break">@value</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private sealed record Section(string Title, List<(string Name, string Value)> Rows);
+
+    private static readonly PdfInspectionDetails[] AllDetails =
+        Enum.GetValues<PdfInspectionDetails>().Where(d => d is not (PdfInspectionDetails.None or PdfInspectionDetails.All)).ToArray();
+
+    private PdfInspectionDetails _details = PdfInspectionDetails.All;
+    private UploadedPdf? _file;
+    private string? _password;
+    private bool _busy;
+    private string? _error;
+    private PdfDocumentInfo? _info;
+    private List<Section> _sections = new();
+
+    private async Task InspectAsync()
+    {
+        if (_file is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        _info = null;
+        var file = _file;
+        var password = string.IsNullOrEmpty(_password) ? null : _password;
+        try
+        {
+            var details = _details;
+            _info = await Task.Run(async () =>
+            {
+                using var stream = file.OpenRead();
+                return await Analyzer.InspectAsync(stream, new PdfInspectionOptions { Password = password, Details = details });
+            });
+            _sections = BuildSections(_info);
+        }
+        catch (Exception ex) when (ErrorMessages.IsExpected(ex))
+        {
+            _error = ErrorMessages.Describe(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static List<Section> BuildSections(PdfDocumentInfo info)
+    {
+        static void Add(Section s, string name, string? value)
+        {
+            if (!string.IsNullOrEmpty(value))
+            {
+                s.Rows.Add((name, value));
+            }
+        }
+
+        static string YesNo(bool value) => value ? "Yes" : "No";
+        static string Date(DateTimeOffset? d) => d?.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture) ?? "";
+
+        var document = new Section("Document", new());
+        Add(document, "PDF version", info.CatalogVersion is null ? info.HeaderVersion : $"{info.EffectiveVersion} (header {info.HeaderVersion})");
+        Add(document, "File size", PdfFileInput.FormatSize(info.FileSize));
+        Add(document, "Pages", info.PageCount?.ToString(CultureInfo.InvariantCulture) ?? "(password required)");
+        Add(document, "Tagged (accessible)", YesNo(info.IsTagged));
+        Add(document, "Fast web view", YesNo(info.IsLinearized));
+        Add(document, "Digitally signed", YesNo(info.IsSigned));
+        Add(document, "Incremental updates", info.IncrementalUpdateCount.ToString(CultureInfo.InvariantCulture));
+        Add(document, "PDF/A", info.Xmp?.PdfALevel ?? "No");
+        Add(document, "Permanent ID", info.PermanentIdHex ?? "(none)");
+        Add(document, "Changing ID", info.ChangingIdHex ?? "(none)");
+        foreach (var ext in info.Extensions)
+        {
+            Add(document, "Extension " + ext.Prefix, $"base {ext.BaseVersion}, level {ext.ExtensionLevel}");
+        }
+
+        var encryption = new Section("Encryption", new());
+        if (info.Encryption is { } e)
+        {
+            Add(encryption, "Algorithm", $"{e.Algorithm} (V{e.V}, R{e.R}, {e.KeyLengthBits}-bit)");
+            Add(encryption, "Opened as", e.AuthenticatedAs == PdfPasswordMatch.None ? "Not opened" : e.AuthenticatedAs + " password");
+            Add(encryption, "Permissions", e.Permissions == PdfPermissions.None ? "None" : e.Permissions.ToString());
+            Add(encryption, "Metadata encrypted", YesNo(e.EncryptMetadata));
+        }
+        else
+        {
+            Add(encryption, "Encrypted", "No");
+        }
+
+        var infoSection = new Section("Document information", new());
+        if (info.Info is { } d)
+        {
+            foreach (var (key, value) in d.Entries.Where(kv => kv.Key is not ("CreationDate" or "ModDate")))
+            {
+                Add(infoSection, key, value);
+            }
+
+            Add(infoSection, "Created", Date(d.CreationDate));
+            Add(infoSection, "Modified", Date(d.ModDate));
+        }
+
+        var xmp = new Section("XMP metadata", new());
+        if (info.Xmp is { } x)
+        {
+            Add(xmp, "Title", x.Title);
+            Add(xmp, "Creators", string.Join(", ", x.Creators));
+            Add(xmp, "Description", x.Description);
+            Add(xmp, "Producer", x.Producer);
+            Add(xmp, "Creator tool", x.CreatorTool);
+            Add(xmp, "Created", Date(x.CreateDate));
+            Add(xmp, "Modified", Date(x.ModifyDate));
+        }
+
+        var pages = new Section("Pages", new());
+        foreach (var page in info.Pages.Take(100))
+        {
+            var size = $"{page.DisplayWidth:0.#} × {page.DisplayHeight:0.#} pt ({page.DisplayWidth / 72 * 25.4:0} × {page.DisplayHeight / 72 * 25.4:0} mm)";
+            Add(pages, "Page " + page.Number, page.Rotate == 0 ? size : $"{size}, rotated {page.Rotate}°");
+        }
+
+        if (info.Pages.Count > 100)
+        {
+            Add(pages, "…", $"{info.Pages.Count - 100} more pages");
+        }
+
+        static Section List<T>(string title, IEnumerable<T> items, Func<T, string> name, Func<T, string?> value) =>
+            new(title, items.Take(200).Select(i => (name(i), value(i) ?? "")).ToList());
+
+        var fonts = List("Fonts", info.Fonts, f => f.BaseFont ?? f.Name, f => $"{f.Subtype}{(f.IsEmbedded ? ", embedded" : ", not embedded")}{(f.IsSubset ? " subset" : "")}{(f.HasToUnicode ? ", Unicode map" : "")}, pages {string.Join(", ", f.Pages)}");
+        var images = List("Images", info.Images, i => i.ObjectNumber is int n ? $"Object {n}" : "Inline", i => i.ToString());
+        var bookmarks = List("Bookmarks", Flatten(info.Bookmarks, 0), b => new string('\u2003', b.Depth) + b.Bookmark.Title, b => b.Bookmark.Page is int p ? "Page " + p : b.Bookmark.Uri ?? b.Bookmark.Action);
+        var fields = List("Form fields", info.FormFields, f => f.FullName, f => $"{f.Type}{(f.Value is null ? "" : ": " + f.Value)}{(f.IsReadOnly ? " (read-only)" : "")}");
+        var signatures = List("Signatures", info.Signatures, s => s.FieldName, s => s.ToString());
+        var labels = List("Page labels", info.PageLabels.Select((label, i) => (label, i)), x => "Page " + (x.i + 1), x => x.label);
+        var actions = List("Actions and scripts", info.Actions, a => "Action", a => a.ToString());
+        if (info.HasJavaScript)
+        {
+            actions.Rows.Insert(0, ("JavaScript", "Yes" + (info.JavaScriptNames.Count > 0 ? ": " + string.Join(", ", info.JavaScriptNames) : "")));
+        }
+
+        var warnings = new Section("Warnings", info.Warnings.Select(w => ("Warning", w)).ToList());
+        return new List<Section> { document, encryption, infoSection, xmp, pages, fonts, images, bookmarks, fields, signatures, labels, actions, warnings };
+    }
+
+    private static IEnumerable<(PdfBookmark Bookmark, int Depth)> Flatten(IReadOnlyList<PdfBookmark> bookmarks, int depth) =>
+        depth > 16 ? Enumerable.Empty<(PdfBookmark, int)>() : bookmarks.SelectMany(b => new[] { (b, depth) }.Concat(Flatten(b.Children, depth + 1)));
+
+    private static string Words(string name) => System.Text.RegularExpressions.Regex.Replace(name, "(?<=[a-z])(?=[A-Z])", " ");
+
+    private async Task DownloadAttachmentAsync(string name)
+    {
+        try
+        {
+            var file = _file!;
+            var password = string.IsNullOrEmpty(_password) ? null : _password;
+            var data = await Task.Run(async () =>
+            {
+                using var stream = file.OpenRead();
+                return await Attachments.ExtractAttachmentAsync(stream, name, password);
+            });
+            await OperationResult.Download(JS, name, data, "application/octet-stream");
+        }
+        catch (Exception ex) when (ErrorMessages.IsExpected(ex))
+        {
+            _error = ErrorMessages.Describe(ex);
+        }
+    }
+}

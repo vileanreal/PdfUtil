@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/PdfUtil/PdfUtil.csproj" />
+    <ProjectReference Include="../../src/PdfUtil.Extensions.DependencyInjection/PdfUtil.Extensions.DependencyInjection.csproj" />
+    <ProjectReference Include="../../src/PdfUtil.Signatures/PdfUtil.Signatures.csproj" />
+    <ProjectReference Include="../../src/PdfUtil.Conversion/PdfUtil.Conversion.csproj" />
+  </ItemGroup>
+
+</Project>

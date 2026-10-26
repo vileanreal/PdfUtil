@@ -1,0 +1,246 @@
+@page "/convert"
+@inherits OperationPage
+@inject IPdfConverter Converter
+
+<PageTitle>Convert · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Convert</h1>
+
+<ul class="nav nav-tabs mb-4">
+    @foreach (var (mode, label) in Modes)
+    {
+        <li class="nav-item">
+            <button class="nav-link @(_mode == mode ? "active" : "")" @onclick="() => Switch(mode)" disabled="@Busy">@label</button>
+        </li>
+    }
+</ul>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        @switch (_mode)
+        {
+            case Mode.PdfToHtml:
+            case Mode.PdfToWord:
+                <PdfFileInput File="_input" FileChanged="OnInputChanged" Disabled="Busy" />
+                <PasswordInput Label="Password (if protected)" @bind-Value="_password" Disabled="Busy" AutoComplete="current-password" />
+                <div class="mb-3">
+                    <label class="form-label" for="pages">Pages</label>
+                    <input id="pages" class="form-control" @bind="_range" disabled="@Busy" placeholder="all" />
+                </div>
+                @if (_mode == Mode.PdfToHtml)
+                {
+                    <div class="mb-3">
+                        <label class="form-label" for="layout">Layout</label>
+                        <select id="layout" class="form-select" @bind="_layout" disabled="@Busy">
+                            <option value="@PdfHtmlLayout.Reflow">Reflow: paragraphs, headings and lists that fit any screen</option>
+                            <option value="@PdfHtmlLayout.Fixed">Fixed: every page as it looks</option>
+                        </select>
+                    </div>
+                    <Check Id="nav" Label="Navigation from the bookmarks" @bind-Value="_navigation" Disabled="Busy" />
+                    <Check Id="xhtml" Label="XHTML (with an XML declaration)" @bind-Value="_xhtml" Disabled="Busy" />
+                }
+                else
+                {
+                    <Check Id="breaks" Label="Start each PDF page on a new page" @bind-Value="_pageBreaks" Disabled="Busy" />
+                }
+
+                break;
+            case Mode.HtmlToPdf:
+                <ul class="nav nav-pills nav-sm mb-2">
+                    <li class="nav-item"><button class="nav-link py-1 @(_paste ? "active" : "")" @onclick="() => _paste = true">Paste HTML</button></li>
+                    <li class="nav-item"><button class="nav-link py-1 @(_paste ? "" : "active")" @onclick="() => _paste = false">Upload a file</button></li>
+                </ul>
+                @if (_paste)
+                {
+                    <textarea class="form-control font-monospace small mb-3" rows="14" @bind="_html" disabled="@Busy"></textarea>
+                }
+                else
+                {
+                    <FileUpload Label="HTML file" Accept=".html,.htm,text/html" File="_input" FileChanged="OnInputChanged" Disabled="Busy" />
+                }
+
+                <div class="form-text mb-3">The sample loads no external style sheets or images (only <code>data:</code> URIs); your own code supplies a resource resolver for that.</div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label" for="size">Page size</label>
+                        <select id="size" class="form-select" @bind="_pageSize" disabled="@Busy">
+                            <option>A4</option><option>Letter</option><option>Legal</option><option>A3</option><option>A5</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label" for="margin">Margins (pt)</label>
+                        <input id="margin" type="number" min="0" class="form-control" @bind="_margin" disabled="@Busy" />
+                    </div>
+                </div>
+                <Check Id="landscape" Label="Landscape" @bind-Value="_landscape" Disabled="Busy" />
+                <div class="mb-3 mt-2">
+                    <label class="form-label" for="footer">Footer</label>
+                    <input id="footer" class="form-control" @bind="_footer" disabled="@Busy" />
+                    <div class="form-text"><code>{page}</code> and <code>{pages}</code> become the page number and count.</div>
+                </div>
+                <FileUpload Label="TrueType font (optional, for any script)" Accept=".ttf,.ttc" @bind-File="_font" Disabled="Busy" />
+                break;
+            case Mode.WordToPdf:
+                <FileUpload Label="Word document (.docx)" Accept=".docx" File="_input" FileChanged="OnInputChanged" Disabled="Busy" />
+                <FileUpload Label="TrueType font (optional)" Accept=".ttf,.ttc" @bind-File="_font" Disabled="Busy"
+                            Help="Fonts the document uses that are not standard ones are replaced by similar fonts unless you supply them." />
+                break;
+        }
+
+        <button class="btn btn-primary mt-2" @onclick="ConvertAsync" disabled="@(Busy || !Ready)">
+            @if (Busy)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+            }
+            Convert
+        </button>
+        <ProgressDisplay Progress="CurrentProgress" />
+    </div>
+
+    <div class="col-lg-7">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_output is not null)
+        {
+            <OperationResult Title="Converted" FileName="@_outputName" Data="_output" ContentType="@_contentType" Details="_details" Warnings="_warnings">
+                @if (_preview is not null)
+                {
+                    @* No sandbox permissions at all: the preview cannot run scripts, submit forms or reach this page. *@
+                    <iframe sandbox="" srcdoc="@_preview" title="Preview" class="w-100 border mb-3" style="height: 32rem; background: white"></iframe>
+                }
+            </OperationResult>
+        }
+    </div>
+</div>
+
+@code {
+    private enum Mode
+    {
+        PdfToHtml,
+        PdfToWord,
+        HtmlToPdf,
+        WordToPdf,
+    }
+
+    private static readonly (Mode, string)[] Modes = { (Mode.PdfToHtml, "PDF → HTML"), (Mode.PdfToWord, "PDF → Word"), (Mode.HtmlToPdf, "HTML → PDF"), (Mode.WordToPdf, "Word → PDF") };
+
+    private Mode _mode;
+    private UploadedPdf? _input;
+    private UploadedPdf? _font;
+    private string? _password;
+    private string? _range;
+    private PdfHtmlLayout _layout;
+    private bool _navigation = true;
+    private bool _xhtml;
+    private bool _pageBreaks;
+    private bool _paste = true;
+    private string _html = SampleContent.Html;
+    private string _pageSize = "A4";
+    private double _margin = 54;
+    private bool _landscape;
+    private string? _footer = "Page {page} of {pages}";
+    private byte[]? _output;
+    private string _outputName = "";
+    private string _contentType = "application/pdf";
+    private string? _preview;
+    private IReadOnlyList<(string, string)> _details = Array.Empty<(string, string)>();
+    private IReadOnlyList<string> _warnings = Array.Empty<string>();
+
+    private bool Ready => _mode == Mode.HtmlToPdf && _paste ? !string.IsNullOrWhiteSpace(_html) : _input is not null;
+
+    private void Switch(Mode mode)
+    {
+        _mode = mode;
+        _input = null;
+        Clear();
+    }
+
+    private void OnInputChanged(UploadedPdf? file)
+    {
+        _input = file;
+        Clear();
+    }
+
+    private void Clear()
+    {
+        _output = null;
+        _preview = null;
+        Error = null;
+    }
+
+    private PdfPageRange? Range() => string.IsNullOrWhiteSpace(_range) ? null : PdfPageRange.Parse(_range);
+
+    private Task ConvertAsync() => RunAsync(async (ct, progress) =>
+    {
+        Clear();
+        var input = _mode == Mode.HtmlToPdf && _paste ? new UploadedPdf("pasted.html", System.Text.Encoding.UTF8.GetBytes(_html)) : _input!;
+        switch (_mode)
+        {
+            case Mode.PdfToHtml:
+            {
+                var options = new PdfToHtmlOptions { Password = Optional(_password), Pages = Range(), Layout = _layout, IncludeNavigation = _navigation, Xhtml = _xhtml, Progress = progress };
+                var (result, output) = await Produce(input, (i, o) => Converter.ConvertToHtmlAsync(i, o, options, ct));
+                Show(output, OutputName(input, "", ".html"), "text/html;charset=utf-8", result.Warnings,
+                    ("Pages", result.PageCount.ToString()), ("Headings", result.HeadingCount.ToString()), ("Lists", result.ListCount.ToString()), ("Images", result.ImageCount.ToString()), ("Links", result.LinkCount.ToString()));
+                _preview = System.Text.Encoding.UTF8.GetString(output);
+                break;
+            }
+
+            case Mode.PdfToWord:
+            {
+                var options = new PdfToDocxOptions { Password = Optional(_password), Pages = Range(), PageBreaks = _pageBreaks, Progress = progress };
+                var (result, output) = await Produce(input, (i, o) => Converter.ConvertToDocxAsync(i, o, options, ct));
+                Show(output, OutputName(input, "", ".docx"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", result.Warnings,
+                    ("Pages", result.PageCount.ToString()), ("Paragraphs", result.ParagraphCount.ToString()), ("Headings", result.HeadingCount.ToString()), ("Lists", result.ListCount.ToString()), ("Tables", result.TableCount.ToString()), ("Images", result.ImageCount.ToString()));
+                break;
+            }
+
+            case Mode.HtmlToPdf:
+            {
+                var size = _pageSize switch { "Letter" => PdfPageSize.Letter, "Legal" => PdfPageSize.Legal, "A3" => PdfPageSize.A3, "A5" => PdfPageSize.A5, _ => PdfPageSize.A4 };
+                var options = new HtmlToPdfOptions
+                {
+                    PageSize = _landscape ? size.Landscape : size,
+                    Margins = PdfMargins.All(_margin),
+                    FooterHtml = string.IsNullOrWhiteSpace(_footer) ? null : $"<p style='text-align:center; font-size:9pt; color:#666'>{System.Net.WebUtility.HtmlEncode(_footer)}</p>",
+                    Progress = progress,
+                };
+                if (_font is not null)
+                {
+                    options.Fonts.Add(new PdfFontSource(_font.Bytes));
+                }
+
+                var (result, output) = await Produce(input, (i, o) => Converter.ConvertFromHtmlAsync(i, o, options, ct));
+                Show(output, OutputName(input, ""), "application/pdf", result.Warnings,
+                    ("Pages", result.PageCount.ToString()), ("Embedded fonts", result.EmbeddedFonts.Count == 0 ? "None (standard fonts)" : string.Join(", ", result.EmbeddedFonts)), ("Images", result.ImageCount.ToString()), ("Links", result.LinkCount.ToString()), ("Bookmarks", result.BookmarkCount.ToString()));
+                break;
+            }
+
+            case Mode.WordToPdf:
+            {
+                var options = new DocxToPdfOptions { Progress = progress };
+                if (_font is not null)
+                {
+                    options.Fonts.Add(new PdfFontSource(_font.Bytes));
+                }
+
+                var (result, output) = await Produce(input, (i, o) => Converter.ConvertFromDocxAsync(i, o, options, ct));
+                Show(output, OutputName(input, ""), "application/pdf", result.Warnings,
+                    ("Pages", result.PageCount.ToString()), ("Sections", result.SectionCount.ToString()), ("Embedded fonts", result.EmbeddedFonts.Count == 0 ? "None (standard fonts)" : string.Join(", ", result.EmbeddedFonts)), ("Images", result.ImageCount.ToString()), ("Links", result.LinkCount.ToString()));
+                break;
+            }
+        }
+    });
+
+    private void Show(byte[] output, string name, string contentType, IReadOnlyList<string> warnings, params (string, string)[] details)
+    {
+        _output = output;
+        _outputName = name;
+        _contentType = contentType;
+        _warnings = warnings;
+        _details = details;
+    }
+}

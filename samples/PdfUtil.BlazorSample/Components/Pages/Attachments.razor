@@ -1,0 +1,163 @@
+@page "/attachments"
+@inherits OperationPage
+@inject IPdfAttachmentManager Manager
+@inject IJSRuntime JS
+
+<PageTitle>Attachments · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Attachments</h1>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <PdfFileInput File="_file" FileChanged="OnFileChangedAsync" Disabled="Busy" />
+        <PasswordInput Label="Password (if protected)" @bind-Value="_password" Disabled="Busy" AutoComplete="current-password" />
+        <button class="btn btn-outline-primary btn-sm mb-3" @onclick="ListAsync" disabled="@(Busy || _file is null)">Refresh the list</button>
+
+        @if (_list is not null)
+        {
+            <div class="card mb-4">
+                <div class="card-header fw-semibold">Attached files (@_list.Count)</div>
+                <ul class="list-group list-group-flush">
+                    @if (_list.Count == 0)
+                    {
+                        <li class="list-group-item text-muted">None.</li>
+                    }
+
+                    @foreach (var attachment in _list)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                            <span class="small text-break">@attachment</span>
+                            @if (attachment.Page is null)
+                            {
+                                <span class="d-flex gap-1">
+                                    <button class="btn btn-outline-primary btn-sm" @onclick="() => DownloadAsync(attachment.Name)" disabled="@Busy">Download</button>
+                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => RemoveAsync(attachment.Name)" disabled="@Busy">Remove</button>
+                                </span>
+                            }
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header fw-semibold">Add a file</div>
+            <div class="card-body">
+                <FileUpload Label="File to attach" @bind-File="_attachment" Disabled="Busy" />
+                <div class="mb-3">
+                    <label class="form-label" for="description">Description</label>
+                    <input id="description" class="form-control" @bind="_description" disabled="@Busy" />
+                </div>
+                <Check Id="replace" Label="Replace an attachment with the same name" @bind-Value="_replace" Disabled="Busy" />
+                <Check Id="incremental" Label="Append to the file (keeps existing signatures valid)" @bind-Value="_incremental" Disabled="Busy" />
+                <button class="btn btn-primary mt-3" @onclick="AddAsync" disabled="@(Busy || _file is null || _attachment is null)">Attach</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null && _output is not null)
+        {
+            <OperationResult Title="@_title" FileName="@OutputName(_file!, "-attachments")" Data="_output" Warnings="_result.Warnings"
+                             Details="@(new[] { ("Saved as", _incremental ? "Incremental update" : "Rewritten file") })" />
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private UploadedPdf? _attachment;
+    private string? _password;
+    private string? _description;
+    private bool _replace;
+    private bool _incremental;
+    private IReadOnlyList<PdfAttachmentInfo>? _list;
+    private PdfEditResult? _result;
+    private byte[]? _output;
+    private string _title = "";
+
+    private async Task OnFileChangedAsync(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        _output = null;
+        _list = null;
+        Error = null;
+        if (file is not null)
+        {
+            await ListAsync();
+        }
+    }
+
+    private Task ListAsync() => RunAsync(async (ct, _) =>
+    {
+        var file = _file!;
+        var password = Optional(_password);
+        _list = await Task.Run(async () =>
+        {
+            using var stream = file.OpenRead();
+            return await Manager.ListAttachmentsAsync(stream, password, ct);
+        });
+    });
+
+    private async Task DownloadAsync(string name)
+    {
+        byte[]? data = null;
+        await RunAsync(async (ct, _) =>
+        {
+            var file = _file!;
+            var password = Optional(_password);
+            data = await Task.Run(async () =>
+            {
+                using var stream = file.OpenRead();
+                return await Manager.ExtractAttachmentAsync(stream, name, password, ct);
+            });
+        });
+        if (data is not null)
+        {
+            await OperationResult.Download(JS, name, data, "application/octet-stream");
+        }
+    }
+
+    private Task AddAsync() => RunAsync(async (ct, progress) =>
+    {
+        var options = new PdfAddAttachmentOptions
+        {
+            Name = _attachment!.Name,
+            Content = _attachment.Bytes,
+            Description = string.IsNullOrWhiteSpace(_description) ? null : _description,
+            ReplaceExisting = _replace,
+            Password = Optional(_password),
+            SaveMode = _incremental ? PdfSaveMode.Incremental : PdfSaveMode.Rewrite,
+            Progress = progress,
+        };
+        (_result, _output) = await Produce(_file!, (input, output) => Manager.AddAttachmentAsync(input, output, options, ct));
+        _title = $"Attached {_attachment.Name}";
+        await ShowResultListAsync(ct);
+    });
+
+    private Task RemoveAsync(string name) => RunAsync(async (ct, progress) =>
+    {
+        var options = new PdfRemoveAttachmentOptions { Name = name, Password = Optional(_password), SaveMode = _incremental ? PdfSaveMode.Incremental : PdfSaveMode.Rewrite, Progress = progress };
+        (_result, _output) = await Produce(_file!, (input, output) => Manager.RemoveAttachmentAsync(input, output, options, ct));
+        _title = $"Removed {name}";
+        await ShowResultListAsync(ct);
+    });
+
+    /// <summary>Continues with the result: further changes apply to it.</summary>
+    private async Task ShowResultListAsync(CancellationToken ct)
+    {
+        _file = new UploadedPdf(_file!.Name, _output!);
+        var password = Optional(_password);
+        _list = await Task.Run(async () =>
+        {
+            using var stream = _file.OpenRead();
+            return await Manager.ListAttachmentsAsync(stream, password, ct);
+        });
+    }
+}

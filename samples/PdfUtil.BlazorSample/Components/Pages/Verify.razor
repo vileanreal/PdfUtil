@@ -1,0 +1,96 @@
+@page "/verify"
+@inject IPdfOpener Opener
+
+<PageTitle>Verify a password · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Verify a password</h1>
+
+<div class="row">
+    <div class="col-lg-7">
+        <PdfFileInput @bind-File="_file" Disabled="_busy" />
+        <PasswordInput Label="Password" @bind-Value="_password" Disabled="_busy" AutoComplete="current-password"
+                       Help="Leave empty to check whether the file opens without a password." />
+
+        <button class="btn btn-primary" @onclick="VerifyAsync" disabled="@(_busy || _file is null)">
+            @if (_busy)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+            }
+            Check password
+        </button>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger mt-4" role="alert">@_error</div>
+        }
+
+        @if (_check is not null)
+        {
+            <div class="alert @AlertClass mt-4" role="status">
+                <div class="fw-semibold fs-5">@Headline</div>
+                @if (_check.IsEncrypted)
+                {
+                    <div class="small mt-1">
+                        Encryption: @_check.Algorithm (revision @_check.Revision).
+                        @(_check.OpensWithoutPassword
+                            ? "The file opens without a password; encryption only enforces the permissions."
+                            : "A password is required to open the file.")
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private string? _password;
+    private bool _busy;
+    private string? _error;
+    private PdfPasswordCheckResult? _check;
+
+    private string AlertClass => _check switch
+    {
+        { IsEncrypted: false } => "alert-secondary",
+        { IsValid: true } => "alert-success",
+        _ => "alert-danger",
+    };
+
+    private string Headline => _check switch
+    {
+        { IsEncrypted: false } => "This PDF is not password protected.",
+        { MatchedAs: PdfPasswordMatch.Owner } => "Correct: this is the owner password (full access).",
+        { MatchedAs: PdfPasswordMatch.User } => "Correct: this is the password to open the file.",
+        _ => "Wrong password.",
+    };
+
+    private async Task VerifyAsync()
+    {
+        if (_file is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        _check = null;
+        var file = _file;
+        var password = _password;
+        try
+        {
+            _check = await Task.Run(async () =>
+            {
+                using var stream = file.OpenRead();
+                return await Opener.VerifyPasswordAsync(stream, password);
+            });
+        }
+        catch (Exception ex) when (ErrorMessages.IsExpected(ex))
+        {
+            _error = ErrorMessages.Describe(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

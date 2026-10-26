@@ -1,0 +1,42 @@
+@* Checkboxes for the permissions granted with the open password. *@
+
+<fieldset class="mb-3" disabled="@Disabled">
+    <legend class="form-label fw-semibold fs-6">@Label</legend>
+    <div class="row">
+        @foreach (var (flag, text) in Options)
+        {
+            var id = IdPrefix + flag;
+            <div class="col-sm-6">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="@id" checked="@Value.HasFlag(flag)" @onchange="e => Toggle(flag, (bool)e.Value!)" />
+                    <label class="form-check-label" for="@id">@text</label>
+                </div>
+            </div>
+        }
+    </div>
+</fieldset>
+
+@code {
+    private static readonly (PdfPermissions Flag, string Text)[] Options =
+    {
+        (PdfPermissions.Print, "Print"),
+        (PdfPermissions.PrintHighQuality, "Print in high quality"),
+        (PdfPermissions.CopyContent, "Copy text and images"),
+        (PdfPermissions.ExtractForAccessibility, "Screen readers (accessibility)"),
+        (PdfPermissions.FillForms, "Fill in forms"),
+        (PdfPermissions.ModifyAnnotations, "Add comments"),
+        (PdfPermissions.ModifyContents, "Edit content"),
+        (PdfPermissions.AssembleDocument, "Insert, rotate or delete pages"),
+    };
+
+    /// <summary>Default for new documents: viewing, printing and filling forms, but no editing.</summary>
+    public const PdfPermissions Default = PdfPermissions.Print | PdfPermissions.PrintHighQuality | PdfPermissions.CopyContent | PdfPermissions.ExtractForAccessibility | PdfPermissions.FillForms;
+
+    [Parameter] public PdfPermissions Value { get; set; }
+    [Parameter] public EventCallback<PdfPermissions> ValueChanged { get; set; }
+    [Parameter] public string Label { get; set; } = "Allowed with the open password";
+    [Parameter] public string IdPrefix { get; set; } = "perm-";
+    [Parameter] public bool Disabled { get; set; }
+
+    private Task Toggle(PdfPermissions flag, bool on) => ValueChanged.InvokeAsync(on ? Value | flag : Value & ~flag);
+}

@@ -1,0 +1,118 @@
+@page "/decrypt"
+@inherits OperationPage
+@inject IPdfEditor Editor
+
+<PageTitle>Remove protection · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Remove protection</h1>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <PdfFileInput Label="Protected PDF" File="_file" FileChanged="OnFileChanged" Disabled="Busy" />
+        <PasswordInput Label="Owner password" @bind-Value="_password" Disabled="Busy" AutoComplete="current-password"
+                       Help="Removing protection also removes the owner's restrictions, so it needs the owner password." />
+
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="allowUser" @bind="_allowUserPassword" disabled="@Busy" />
+            <label class="form-check-label" for="allowUser">Also accept the password to open the file (only if you are entitled to an unrestricted copy)</label>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="editInfo" @bind="_editInfo" disabled="@Busy" />
+                    <label class="form-check-label fw-semibold" for="editInfo">Also change document information</label>
+                </div>
+            </div>
+            @if (_editInfo)
+            {
+                <div class="card-body">
+                    <InfoChangesEditor @ref="_infoEditor" File="_file" Password="@_password" Disabled="Busy" />
+                    <button class="btn btn-link btn-sm px-0 mt-2" type="button" @onclick="() => _infoEditor!.ReloadAsync()" disabled="@Busy">Load current values with this password</button>
+                </div>
+            }
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" @onclick="DecryptAsync" disabled="@(Busy || _file is null)">
+                @if (Busy)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                }
+                Remove protection
+            </button>
+            @if (Busy)
+            {
+                <button class="btn btn-outline-secondary" @onclick="Cancel">Cancel</button>
+            }
+        </div>
+        <ProgressDisplay Progress="CurrentProgress" />
+    </div>
+
+    <div class="col-lg-5">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null && _output is not null)
+        {
+            <OperationResult Title="Protection removed" FileName="@_outputName" Data="_output" Details="ResultDetails()" Warnings="_result.Warnings" />
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private string? _password;
+    private bool _allowUserPassword;
+    private bool _editInfo;
+    private InfoChangesEditor? _infoEditor;
+    private PdfEditResult? _result;
+    private byte[]? _output;
+    private string _outputName = "";
+
+    private void OnFileChanged(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        _output = null;
+        Error = null;
+    }
+
+    private IReadOnlyList<(string, string)> ResultDetails()
+    {
+        var details = new List<(string, string)> { ("PDF version", _result!.OutputVersion), ("Encrypted", "No") };
+        if (_result.DocumentInfoChanged)
+        {
+            details.Add(("Document info", "Updated" + (_result.XmpUpdated ? " (including XMP)" : "")));
+        }
+
+        return details;
+    }
+
+    private Task DecryptAsync()
+    {
+        var file = _file;
+        if (file is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        _result = null;
+        _output = null;
+        var infoChanges = _editInfo ? _infoEditor?.BuildChanges() : null;
+        return RunAsync(async (ct, progress) =>
+        {
+            var options = new PdfDecryptOptions { Password = _password, AllowUserPassword = _allowUserPassword, InfoChanges = infoChanges, Progress = progress };
+            (_result, _output) = await Task.Run(async () =>
+            {
+                using var input = file.OpenRead();
+                using var buffer = new MemoryStream();
+                var r = await Editor.DecryptAsync(input, buffer, options, ct);
+                return (r, buffer.ToArray());
+            });
+            _outputName = Path.GetFileNameWithoutExtension(file.Name) + "-unprotected.pdf";
+        });
+    }
+}

@@ -1,0 +1,26 @@
+@* Shows the library's progress reports (IProgress<PdfProgress>) while an operation runs. *@
+
+@if (Progress is { } p)
+{
+    <div class="mt-3" role="status" aria-live="polite">
+        <div class="d-flex justify-content-between small text-muted mb-1">
+            <span>@StageText(p.Stage)</span>
+            <span>@((int)(p.Fraction * 100))%</span>
+        </div>
+        <div class="progress" style="height: 0.5rem;">
+            <div class="progress-bar" style="width: @((p.Fraction * 100).ToString("0", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public PdfProgress? Progress { get; set; }
+
+    private static string StageText(PdfProgressStage stage) => stage switch
+    {
+        PdfProgressStage.Reading => "Reading the document",
+        PdfProgressStage.Writing => "Writing the new file",
+        PdfProgressStage.Verifying => "Checking the new file",
+        _ => stage.ToString(),
+    };
+}

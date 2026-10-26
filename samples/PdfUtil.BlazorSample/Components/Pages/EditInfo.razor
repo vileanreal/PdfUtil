@@ -1,0 +1,113 @@
+@page "/edit-info"
+@inherits OperationPage
+@inject IPdfEditor Editor
+
+<PageTitle>Edit document information · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Edit document information</h1>
+<p class="text-muted">Changes the title, author and other information without changing the protection: unprotected files stay unprotected, and protected files keep exactly the same passwords and permissions.</p>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <PdfFileInput File="_file" FileChanged="OnFileChanged" Disabled="Busy" />
+        <PasswordInput Label="Owner password (only for protected files)" @bind-Value="_password" Disabled="Busy" AutoComplete="current-password"
+                       Help="Needed to keep the protection exactly as it is." />
+        <button class="btn btn-link btn-sm px-0 mb-3" type="button" @onclick="() => _infoEditor!.ReloadAsync()" disabled="@(Busy || _file is null)">Load current values with this password</button>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <InfoChangesEditor @ref="_infoEditor" File="_file" Password="@_password" Disabled="Busy" />
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <Check Id="incremental" Label="Append the change instead of rewriting the file (existing signatures stay valid)" @bind-Value="_incremental" Disabled="Busy" />
+            <Check Id="objstm" Label="Smaller file (compressed object streams; rewrite only)" @bind-Value="_objectStreams" Disabled="@(Busy || _incremental)" />
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@(Busy || _file is null)">
+                @if (Busy)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                }
+                Save changes
+            </button>
+            @if (Busy)
+            {
+                <button class="btn btn-outline-secondary" @onclick="Cancel">Cancel</button>
+            }
+        </div>
+        <ProgressDisplay Progress="CurrentProgress" />
+    </div>
+
+    <div class="col-lg-5">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null && _output is not null)
+        {
+            <OperationResult Title="Document information updated" FileName="@_outputName" Data="_output" Details="ResultDetails()" Warnings="_result.Warnings" />
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private string? _password;
+    private InfoChangesEditor? _infoEditor;
+    private PdfEditResult? _result;
+    private byte[]? _output;
+    private string _outputName = "";
+
+    private bool _incremental;
+    private bool _objectStreams;
+
+    private void OnFileChanged(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        _output = null;
+        Error = null;
+    }
+
+    private IReadOnlyList<(string, string)> ResultDetails() => new List<(string, string)>
+    {
+        ("Protection", _result!.IsEncrypted ? $"Unchanged ({_result.Algorithm})" : "None"),
+        ("XMP metadata", _result.XmpUpdated ? "Updated" : "Not present or unchanged"),
+    };
+
+    private Task SaveAsync()
+    {
+        var file = _file;
+        if (file is null || _infoEditor is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        _result = null;
+        _output = null;
+        var changes = _infoEditor.BuildChanges();
+        return RunAsync(async (ct, progress) =>
+        {
+            var options = new PdfEditInfoOptions
+            {
+                Changes = changes,
+                Password = string.IsNullOrEmpty(_password) ? null : _password,
+                SaveMode = _incremental ? PdfSaveMode.Incremental : PdfSaveMode.Rewrite,
+                Write = _objectStreams && !_incremental ? new PdfWriteOptions { UseObjectStreams = true } : null,
+                Progress = progress,
+            };
+            (_result, _output) = await Task.Run(async () =>
+            {
+                using var input = file.OpenRead();
+                using var buffer = new MemoryStream();
+                var r = await Editor.EditInfoAsync(input, buffer, options, ct);
+                return (r, buffer.ToArray());
+            });
+            _outputName = Path.GetFileNameWithoutExtension(file.Name) + "-edited.pdf";
+        });
+    }
+}

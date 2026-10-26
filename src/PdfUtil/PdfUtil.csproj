@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>PdfUtil</RootNamespace>
+    <AssemblyName>PdfUtil</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <PackageId>PdfUtil</PackageId>
+    <Description>PDF helper library for .NET: password protection (AES-256, AES-128, RC4-128), password verification and document metadata inspection for PDF 1.0 through 2.0.</Description>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PdfUtil.Tests" />
+    <InternalsVisibleTo Include="PdfUtil.Signatures" />
+    <InternalsVisibleTo Include="PdfUtil.Conversion" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

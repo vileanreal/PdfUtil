@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>PdfUtil.Conversion</RootNamespace>
+    <AssemblyName>PdfUtil.Conversion</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <PackageId>PdfUtil.Conversion</PackageId>
+    <Description>Conversion between PDF and HTML, and between PDF and Word (DOCX), for PdfUtil. No third-party dependencies.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../PdfUtil/PdfUtil.csproj" />
+    <InternalsVisibleTo Include="PdfUtil.Tests" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,46 @@
+@* A successful result: details, warnings and a download button for the produced file. *@
+@inject IJSRuntime JS
+
+<div class="card border-success">
+    <div class="card-header bg-success text-white">@Title</div>
+    <div class="card-body">
+        <dl class="row mb-3 small">
+            <dt class="col-5">File</dt><dd class="col-7 text-break">@FileName</dd>
+            <dt class="col-5">Size</dt><dd class="col-7">@PdfFileInput.FormatSize(Data.Length)</dd>
+            @foreach (var (name, value) in Details)
+            {
+                <dt class="col-5">@name</dt><dd class="col-7">@value</dd>
+            }
+        </dl>
+        @foreach (var warning in Warnings)
+        {
+            <div class="alert alert-warning py-2 small mb-2">@warning</div>
+        }
+        @ChildContent
+        <button class="btn btn-success" @onclick="DownloadAsync">Download</button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string FileName { get; set; } = "";
+    [Parameter, EditorRequired] public byte[] Data { get; set; } = Array.Empty<byte>();
+    [Parameter] public IReadOnlyList<(string Name, string Value)> Details { get; set; } = Array.Empty<(string, string)>();
+    [Parameter] public IReadOnlyList<string> Warnings { get; set; } = Array.Empty<string>();
+
+    /// <summary>The media type of <see cref="Data"/>.</summary>
+    [Parameter] public string ContentType { get; set; } = "application/pdf";
+
+    /// <summary>Extra content shown above the download button (for example a preview).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private Task DownloadAsync() => Download(JS, FileName, Data, ContentType);
+
+    /// <summary>Saves bytes as a file in the browser.</summary>
+    public static async Task Download(IJSRuntime js, string fileName, byte[] data, string contentType = "application/pdf")
+    {
+        using var stream = new MemoryStream(data, writable: false);
+        using var reference = new DotNetStreamReference(stream);
+        await js.InvokeVoidAsync("pdfUtilSample.download", fileName, reference, contentType);
+    }
+}

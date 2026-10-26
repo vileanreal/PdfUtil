@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>PdfUtil.Cli</RootNamespace>
+    <AssemblyName>PdfUtil.Cli</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>pdfutil</ToolCommandName>
+    <PackageId>PdfUtil.Cli</PackageId>
+    <Description>The pdfutil command-line tool: protect, inspect, repair, edit, merge, split, sign and convert PDF files.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../PdfUtil/PdfUtil.csproj" />
+    <ProjectReference Include="../PdfUtil.Signatures/PdfUtil.Signatures.csproj" />
+    <ProjectReference Include="../PdfUtil.Conversion/PdfUtil.Conversion.csproj" />
+    <InternalsVisibleTo Include="PdfUtil.Tests" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

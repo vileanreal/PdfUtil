@@ -1,0 +1,82 @@
+@page "/text"
+@inherits OperationPage
+@inject IPdfTextExtractor Extractor
+@inject IJSRuntime JS
+
+<PageTitle>Extract text · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Extract text</h1>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <PdfFileInput File="_file" FileChanged="OnFileChanged" Disabled="Busy" />
+        <PasswordInput Label="Password (if protected)" @bind-Value="_password" Disabled="Busy" AutoComplete="current-password" />
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="range">Pages</label>
+            <input id="range" class="form-control" @bind="_range" disabled="@Busy" placeholder="all" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="order">Order</label>
+            <select id="order" class="form-select" @bind="_order" disabled="@Busy">
+                <option value="@PdfTextOrder.Content">As the document draws it (usually reading order)</option>
+                <option value="@PdfTextOrder.Layout">By position: top to bottom, left to right</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" @onclick="ExtractAsync" disabled="@(Busy || _file is null)">Extract</button>
+        <ProgressDisplay Progress="CurrentProgress" />
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger mt-4" role="alert">@Error</div>
+        }
+    </div>
+
+    <div class="col-lg-7">
+        @if (_result is not null)
+        {
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted small">@_result.Pages.Count page(s), @_result.Text.Length characters@(_result.UnknownGlyphCount > 0 ? $", {_result.UnknownGlyphCount} unknown glyphs" : "")</span>
+                <button class="btn btn-outline-success btn-sm" @onclick="DownloadAsync">Download .txt</button>
+            </div>
+            @foreach (var warning in _result.Warnings)
+            {
+                <div class="alert alert-warning py-2 small">@warning</div>
+            }
+
+            @foreach (var pageText in _result.Pages)
+            {
+                <div class="card mb-3">
+                    <div class="card-header small">Page @pageText.Number · @pageText.Runs.Count runs · @pageText.Images.Count images</div>
+                    <pre class="card-body mb-0 small" style="white-space: pre-wrap">@pageText.Text</pre>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private string? _password;
+    private string? _range;
+    private PdfTextOrder _order;
+    private PdfTextExtractionResult? _result;
+
+    private void OnFileChanged(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        Error = null;
+    }
+
+    private Task ExtractAsync() => RunAsync(async (ct, progress) =>
+    {
+        var file = _file!;
+        var options = new PdfTextExtractionOptions { Password = Optional(_password), Order = _order, Pages = string.IsNullOrWhiteSpace(_range) ? null : PdfPageRange.Parse(_range), Progress = progress };
+        _result = await Task.Run(async () =>
+        {
+            using var stream = file.OpenRead();
+            return await Extractor.ExtractAsync(stream, options, ct);
+        });
+    });
+
+    private Task DownloadAsync() => OperationResult.Download(JS, OutputName(_file!, "", ".txt"), System.Text.Encoding.UTF8.GetBytes(_result!.Text), "text/plain;charset=utf-8");
+}

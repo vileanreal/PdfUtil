@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>PdfUtil.Signatures</RootNamespace>
+    <AssemblyName>PdfUtil.Signatures</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <PackageId>PdfUtil.Signatures</PackageId>
+    <Description>Digital signatures (PAdES signing and verification, RFC 3161 timestamps) and certificate (public-key) encryption for PdfUtil.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../PdfUtil/PdfUtil.csproj" />
+    <InternalsVisibleTo Include="PdfUtil.Tests" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,75 @@
+@page "/sanitize"
+@inherits OperationPage
+@inject IPdfCleaner Cleaner
+
+<PageTitle>Sanitize · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Sanitize</h1>
+<p class="text-muted">Remove active and hidden content before sharing a file. JavaScript is always worth removing; the rest is up to you.</p>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <PdfFileInput File="_file" FileChanged="OnFileChanged" Disabled="Busy" />
+        <PasswordInput Label="Password (if protected)" @bind-Value="_password" Disabled="Busy" AutoComplete="current-password"
+                       Help="The protection is kept; the owner password lets PdfUtil rewrite the file." />
+        <div class="card mb-3">
+            <div class="card-body">
+                <Check Id="js" Label="JavaScript (document, page and form scripts)" @bind-Value="_options.RemoveJavaScript" Disabled="Busy" />
+                <Check Id="actions" Label="Actions (launching files, submitting forms, opening URLs)" @bind-Value="_options.RemoveActions" Disabled="Busy" />
+                <Check Id="annotations" Label="Annotations (comments, highlights, stamps)" @bind-Value="_options.RemoveAnnotations" Disabled="Busy" />
+                <Check Id="links" Label="…but keep links" @bind-Value="_options.KeepLinks" Disabled="@(Busy || !_options.RemoveAnnotations)" />
+                <Check Id="attachments" Label="Attachments" @bind-Value="_options.RemoveAttachments" Disabled="Busy" />
+                <Check Id="info" Label="Document information (title, author…)" @bind-Value="_options.RemoveDocumentInfo" Disabled="Busy" />
+                <Check Id="xmp" Label="XMP metadata" @bind-Value="_options.RemoveXmp" Disabled="Busy" />
+                <Check Id="objstm" Label="Smaller file (compressed object streams)" @bind-Value="_objectStreams" Disabled="Busy" />
+            </div>
+        </div>
+        <button class="btn btn-primary" @onclick="SanitizeAsync" disabled="@(Busy || _file is null)">Sanitize</button>
+        <ProgressDisplay Progress="CurrentProgress" />
+    </div>
+
+    <div class="col-lg-5">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null && _output is not null)
+        {
+            <OperationResult Title="@($"Removed {_result.Removed.Count} item(s)")" FileName="@OutputName(_file!, "-sanitized")" Data="_output"
+                             Details="@(_result.Removed.GroupBy(r => r.Kind).Select(g => (g.Key.ToString(), g.Count().ToString())).ToList())" Warnings="_result.Warnings">
+                <ul class="small mb-3">
+                    @foreach (var item in _result.Removed.Take(50))
+                    {
+                        <li>@item.Description</li>
+                    }
+                </ul>
+            </OperationResult>
+        }
+    </div>
+</div>
+
+@code {
+    private readonly PdfSanitizeOptions _options = new();
+    private UploadedPdf? _file;
+    private string? _password;
+    private bool _objectStreams;
+    private PdfSanitizeResult? _result;
+    private byte[]? _output;
+
+    private void OnFileChanged(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        _output = null;
+        Error = null;
+    }
+
+    private Task SanitizeAsync() => RunAsync(async (ct, progress) =>
+    {
+        _options.Password = Optional(_password);
+        _options.Write = _objectStreams ? new PdfWriteOptions { UseObjectStreams = true } : null;
+        _options.Progress = progress;
+        (_result, _output) = await Produce(_file!, (input, output) => Cleaner.SanitizeAsync(input, output, _options, ct));
+    });
+}

@@ -1,0 +1,73 @@
+@* Picks any file (an attachment, an image, a certificate, a font, HTML or Word) and uploads it into memory. *@
+
+<div class="mb-3">
+    <label class="form-label fw-semibold" for="@_id">@Label</label>
+    <InputFile id="@_id" class="form-control" accept="@Accept" OnChange="LoadAsync" disabled="@(Disabled || _loading)" />
+    @if (_loading)
+    {
+        <div class="form-text">Uploading…</div>
+    }
+    else if (_error is not null)
+    {
+        <div class="text-danger small mt-1">@_error</div>
+    }
+    else if (File is not null)
+    {
+        <div class="form-text">@File.Name · @PdfFileInput.FormatSize(File.Bytes.Length)</div>
+    }
+    else if (Help is not null)
+    {
+        <div class="form-text">@Help</div>
+    }
+</div>
+
+@code {
+    private readonly string _id = "upload-" + Guid.NewGuid().ToString("N");
+    private bool _loading;
+    private string? _error;
+
+    [Parameter] public string Label { get; set; } = "File";
+
+    /// <summary>The <c>accept</c> attribute, for example <c>.png,.jpg</c>.</summary>
+    [Parameter] public string? Accept { get; set; }
+
+    [Parameter] public string? Help { get; set; }
+
+    [Parameter] public UploadedPdf? File { get; set; }
+
+    [Parameter] public EventCallback<UploadedPdf?> FileChanged { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _loading = true;
+        try
+        {
+            if (e.File.Size > SampleLimits.MaxUploadBytes)
+            {
+                _error = $"The file is larger than {PdfFileInput.FormatSize(SampleLimits.MaxUploadBytes)}.";
+                await FileChanged.InvokeAsync(null);
+                return;
+            }
+
+            using var buffer = new MemoryStream();
+            await using (var upload = e.File.OpenReadStream(SampleLimits.MaxUploadBytes))
+            {
+                await upload.CopyToAsync(buffer);
+            }
+
+            await FileChanged.InvokeAsync(new UploadedPdf(e.File.Name, buffer.ToArray()));
+        }
+        catch (IOException ex)
+        {
+            _error = "The upload failed: " + ex.Message;
+            await FileChanged.InvokeAsync(null);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

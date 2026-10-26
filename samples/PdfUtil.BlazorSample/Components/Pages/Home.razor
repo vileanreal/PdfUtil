@@ -1,0 +1,174 @@
+@page "/"
+
+<PageTitle>PdfUtil sample</PageTitle>
+
+<h1 class="mb-2">PdfUtil sample</h1>
+<p class="lead text-muted">Protect, inspect, repair, edit, merge, split, sign and convert PDF files, with PDF 1.0 to 2.0.</p>
+
+<div class="row g-3 mt-2">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Protect</h5>
+                <p class="card-text">Encrypt a PDF with an open password, an owner password and permissions, then download it.</p>
+                <a href="protect" class="btn btn-primary">Protect a PDF</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Verify password</h5>
+                <p class="card-text">Find out whether a password opens a PDF, and whether it is the open or the owner password.</p>
+                <a href="verify" class="btn btn-outline-primary">Check a password</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Inspect</h5>
+                <p class="card-text">See version, pages, encryption, document information, XMP metadata and identifiers.</p>
+                <a href="inspect" class="btn btn-outline-primary">Inspect a PDF</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mt-1">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Remove protection</h5>
+                <p class="card-text">Write an unprotected copy with the owner password.</p>
+                <a href="decrypt" class="btn btn-outline-primary">Remove protection</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Change security</h5>
+                <p class="card-text">Change passwords, permissions or the algorithm, keeping whatever you don't change.</p>
+                <a href="security" class="btn btn-outline-primary">Change security</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Edit info</h5>
+                <p class="card-text">Change the title, author and other information, keeping the protection as it is.</p>
+                <a href="edit-info" class="btn btn-outline-primary">Edit info</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h2 class="h5 mt-5 mb-3">More tools</h2>
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Validate and repair</h5>
+                <p class="card-text">Check the structure, list problems, and rebuild damaged files.</p>
+                <a href="validate" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Sanitize</h5>
+                <p class="card-text">Remove JavaScript, actions, annotations, attachments and metadata before sharing.</p>
+                <a href="sanitize" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Attachments</h5>
+                <p class="card-text">List, download, add and remove embedded files.</p>
+                <a href="attachments" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Rotate or delete pages</h5>
+                <p class="card-text">Rotate or remove a range of pages.</p>
+                <a href="pages" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Merge</h5>
+                <p class="card-text">Combine files in the order you choose, with page ranges and bookmarks.</p>
+                <a href="merge" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Split</h5>
+                <p class="card-text">Split into parts of N pages or by page ranges.</p>
+                <a href="split" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Extract text</h5>
+                <p class="card-text">Read the text of every page, in reading or layout order.</p>
+                <a href="text" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Watermark</h5>
+                <p class="card-text">Stamp text in any script, or an image, with a live preview.</p>
+                <a href="watermark" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Sign</h5>
+                <p class="card-text">Sign with your certificate, visibly or invisibly, with an optional timestamp.</p>
+                <a href="sign" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Verify signatures</h5>
+                <p class="card-text">Check every signature and what changed after it.</p>
+                <a href="verify-signatures" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Convert</h5>
+                <p class="card-text">PDF to HTML or Word, and HTML or Word to PDF.</p>
+                <a href="convert" class="btn btn-outline-primary">Open</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-secondary mt-4 small">
+    Every file the sample produces is re-opened and checked before you can download it. Files stay in memory for
+    your session only; nothing is fetched from the network (except an optional signing timestamp).
+</div>

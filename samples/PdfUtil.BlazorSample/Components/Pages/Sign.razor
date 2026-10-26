@@ -1,0 +1,125 @@
+@page "/sign"
+@inherits OperationPage
+@inject IPdfSigner Signer
+@using System.Security.Cryptography
+@using System.Security.Cryptography.X509Certificates
+
+<PageTitle>Sign · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Sign</h1>
+
+<div class="alert alert-info small">
+    Your certificate and its password are held only in memory for this session, used for this signature, and never
+    stored. Close the page to discard them.
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <PdfFileInput File="_file" FileChanged="OnFileChanged" Disabled="Busy" />
+        <FileUpload Label="Certificate with private key (.pfx or .p12)" Accept=".pfx,.p12" @bind-File="_pfx" Disabled="Busy" />
+        <PasswordInput Label="Certificate password" @bind-Value="_pfxPassword" Disabled="Busy" AutoComplete="off" />
+        <div class="row g-2 mb-3">
+            <div class="col-md-6">
+                <label class="form-label" for="reason">Reason</label>
+                <input id="reason" class="form-control" @bind="_reason" disabled="@Busy" placeholder="Approved" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="location">Location</label>
+                <input id="location" class="form-control" @bind="_location" disabled="@Busy" />
+            </div>
+        </div>
+        <Check Id="visible" Label="Show the signature on a page" @bind-Value="_visible" Disabled="Busy" />
+        @if (_visible)
+        {
+            <div class="row g-2 my-2">
+                <div class="col-3"><label class="form-label small" for="page">Page</label><input id="page" type="number" min="1" class="form-control form-control-sm" @bind="_page" /></div>
+                <div class="col-3"><label class="form-label small" for="x">Left (pt)</label><input id="x" type="number" class="form-control form-control-sm" @bind="_x" /></div>
+                <div class="col-3"><label class="form-label small" for="y">Bottom (pt)</label><input id="y" type="number" class="form-control form-control-sm" @bind="_y" /></div>
+                <div class="col-3"><label class="form-label small" for="w">Width (pt)</label><input id="w" type="number" class="form-control form-control-sm" @bind="_width" /></div>
+            </div>
+            <div class="form-text mb-2">Measured from the bottom-left corner of the page as displayed; the box is 60 pt high.</div>
+        }
+
+        <div class="mb-3 mt-3">
+            <label class="form-label" for="tsa">Timestamp server (optional)</label>
+            <input id="tsa" class="form-control" @bind="_timestamp" disabled="@Busy" placeholder="https://timestamp.example.com" />
+            <div class="form-text">An RFC 3161 server adds a trusted signing time. This is the only network request the sample makes.</div>
+        </div>
+        <button class="btn btn-primary" @onclick="SignAsync" disabled="@(Busy || _file is null || _pfx is null)">Sign</button>
+    </div>
+
+    <div class="col-lg-5">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null && _output is not null)
+        {
+            <OperationResult Title="Signed" FileName="@OutputName(_file!, "-signed")" Data="_output" Warnings="_result.Warnings"
+                             Details="@(new[] { ("Field", _result.FieldName), ("Signed by", _signer ?? ""), ("Timestamp", _result.TimestampTime?.ToString("u") ?? "None") })" />
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private UploadedPdf? _pfx;
+    private string? _pfxPassword;
+    private string? _reason;
+    private string? _location;
+    private bool _visible;
+    private int _page = 1;
+    private double _x = 36;
+    private double _y = 36;
+    private double _width = 200;
+    private string? _timestamp;
+    private string? _signer;
+    private PdfSignResult? _result;
+    private byte[]? _output;
+
+    private void OnFileChanged(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        _output = null;
+        Error = null;
+    }
+
+    private Task SignAsync() => RunAsync(async (ct, _) =>
+    {
+        X509Certificate2 certificate;
+        try
+        {
+            // Ephemeral key sets keep the key off disk; macOS does not support them.
+#pragma warning disable SYSLIB0057 // X509CertificateLoader is .NET 9+.
+            certificate = new X509Certificate2(_pfx!.Bytes, _pfxPassword, OperatingSystem.IsMacOS() ? X509KeyStorageFlags.DefaultKeySet : X509KeyStorageFlags.EphemeralKeySet);
+#pragma warning restore SYSLIB0057
+        }
+        catch (CryptographicException)
+        {
+            Error = "The certificate file could not be opened: check the password.";
+            return;
+        }
+
+        using (certificate)
+        {
+            if (!certificate.HasPrivateKey)
+            {
+                Error = "The certificate file has no private key, so it cannot sign.";
+                return;
+            }
+
+            var options = new PdfSignOptions
+            {
+                Certificate = certificate,
+                Reason = string.IsNullOrWhiteSpace(_reason) ? null : _reason,
+                Location = string.IsNullOrWhiteSpace(_location) ? null : _location,
+                Appearance = _visible ? new PdfSignatureAppearance { Page = _page, Bounds = new PdfRectangle(_x, _y, _x + _width, _y + 60) } : null,
+                TimestampServer = Uri.TryCreate(_timestamp, UriKind.Absolute, out var tsa) ? tsa : null,
+            };
+            _signer = certificate.GetNameInfo(X509NameType.SimpleName, false);
+            (_result, _output) = await Produce(_file!, (input, output) => Signer.SignAsync(input, output, options, ct));
+        }
+    });
+}

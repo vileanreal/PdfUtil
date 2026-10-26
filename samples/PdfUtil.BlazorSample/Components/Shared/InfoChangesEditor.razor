@@ -1,0 +1,239 @@
+@* Edits document information. Shows the file's current values and turns only the edited fields into PdfInfoChanges. *@
+@inject IPdfInspector Inspector
+
+<fieldset disabled="@Disabled">
+    @if (_loading)
+    {
+        <div class="form-text mb-2">Reading the current values…</div>
+    }
+    else if (_note is not null)
+    {
+        <div class="alert alert-info py-2 small">@_note</div>
+    }
+    else
+    {
+        <p class="form-text mt-0">Fields show the current values. Only changed fields are updated; clear a field to remove it.</p>
+    }
+
+    <div class="row g-3">
+        @foreach (var field in _fields)
+        {
+            <div class="col-md-6">
+                <label class="form-label" for="@field.Id">@field.Label</label>
+                <input id="@field.Id" class="form-control" @bind="field.Value" @bind:event="oninput" placeholder="@field.Placeholder" />
+            </div>
+        }
+    </div>
+
+    <div class="form-check mt-3">
+        <input class="form-check-input" type="checkbox" id="updateModDate" @bind="_updateModDate" />
+        <label class="form-check-label" for="updateModDate">Set the modification date to now</label>
+    </div>
+
+    <div class="mt-4">
+        <div class="fw-semibold mb-2">Custom properties</div>
+        @foreach (var row in _customRows)
+        {
+            <div class="input-group mb-2">
+                <input class="form-control" placeholder="Name, e.g. Department" @bind="row.Key" @bind:event="oninput" aria-label="Property name" />
+                <input class="form-control" placeholder="Value" @bind="row.Value" @bind:event="oninput" aria-label="Property value" />
+                <button class="btn btn-outline-danger" type="button" @onclick="() => RemoveCustomRow(row)" aria-label="Remove property">Remove</button>
+            </div>
+        }
+        <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="() => _customRows.Add(new CustomRow())">Add property</button>
+        <div class="form-text">Names use letters, digits and punctuation, without spaces.</div>
+    </div>
+
+    <p class="form-text mb-0 mt-3">If the PDF has XMP metadata, it is updated to match, so every viewer shows the same values.</p>
+</fieldset>
+
+@code {
+    private sealed class InfoField(string key, string label, string? placeholder = null)
+    {
+        public string Id { get; } = "info-" + key;
+        public string Key { get; } = key;
+        public string Label { get; } = label;
+        public string? Placeholder { get; } = placeholder;
+        public string? Original { get; set; }
+        public string Value { get; set; } = "";
+    }
+
+    private sealed class CustomRow
+    {
+        public string Key { get; set; } = "";
+        public string Value { get; set; } = "";
+        public string? OriginalKey { get; init; }
+        public string? OriginalValue { get; init; }
+    }
+
+    private readonly List<InfoField> _fields = new()
+    {
+        new("Title", "Title"),
+        new("Author", "Author"),
+        new("Subject", "Subject"),
+        new("Keywords", "Keywords", "Comma-separated"),
+        new("Creator", "Creator (original application)"),
+        new("Producer", "Producer (PDF application)"),
+    };
+
+    private readonly List<CustomRow> _customRows = new();
+    private readonly HashSet<string> _removedCustomKeys = new(StringComparer.Ordinal);
+    private UploadedPdf? _loadedFile;
+    private bool _updateModDate = true;
+    private bool _prefilled;
+    private bool _loading;
+    private string? _note;
+
+    /// <summary>The PDF whose current values are shown.</summary>
+    [Parameter] public UploadedPdf? File { get; set; }
+
+    /// <summary>Password used to read the current values of a protected file.</summary>
+    [Parameter] public string? Password { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!ReferenceEquals(File, _loadedFile))
+        {
+            _loadedFile = File;
+            await ReloadAsync();
+        }
+    }
+
+    /// <summary>Reads the current values again (for example after a password was entered).</summary>
+    public async Task ReloadAsync()
+    {
+        foreach (var field in _fields)
+        {
+            field.Original = null;
+            field.Value = "";
+        }
+
+        _customRows.Clear();
+        _removedCustomKeys.Clear();
+        _prefilled = false;
+        _note = null;
+        var file = File;
+        if (file is null)
+        {
+            return;
+        }
+
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var password = string.IsNullOrEmpty(Password) ? null : Password;
+            var info = await Task.Run(async () =>
+            {
+                using var stream = file.OpenRead();
+                return await Inspector.GetInfoAsync(stream, password);
+            });
+            if (info.RequiresPassword)
+            {
+                _note = "This PDF is password protected, so its current values can't be shown until you enter its password. Fields you fill in replace the current values; empty fields are left unchanged.";
+                return;
+            }
+
+            var entries = info.Info?.Entries ?? new Dictionary<string, string>();
+            foreach (var field in _fields)
+            {
+                field.Original = entries.TryGetValue(field.Key, out var value) ? value : null;
+                field.Value = field.Original ?? "";
+            }
+
+            foreach (var (key, value) in info.Info?.CustomEntries ?? new Dictionary<string, string>())
+            {
+                _customRows.Add(new CustomRow { Key = key, Value = value, OriginalKey = key, OriginalValue = value });
+            }
+
+            _prefilled = true;
+        }
+        catch (PdfInvalidPasswordException)
+        {
+            _note = "The password doesn't open this PDF, so its current values can't be shown. Fields you fill in replace the current values; empty fields are left unchanged.";
+        }
+        catch (Exception ex) when (ErrorMessages.IsExpected(ex))
+        {
+            _note = "The current document information could not be read. Fields you fill in are applied; empty fields are left unchanged.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void RemoveCustomRow(CustomRow row)
+    {
+        _customRows.Remove(row);
+        if (row.OriginalKey is not null)
+        {
+            _removedCustomKeys.Add(row.OriginalKey);
+        }
+    }
+
+    /// <summary>The library's change set: only what differs from the original values.</summary>
+    public PdfInfoChanges BuildChanges()
+    {
+        var changes = new PdfInfoChanges { UpdateModificationDate = _updateModDate };
+        foreach (var field in _fields)
+        {
+            var value = string.IsNullOrWhiteSpace(field.Value) ? "" : field.Value;
+            if (_prefilled && value == (field.Original ?? ""))
+            {
+                continue;
+            }
+
+            if (value.Length == 0)
+            {
+                if (_prefilled)
+                {
+                    changes.Remove.Add(field.Key);
+                }
+
+                continue;
+            }
+
+            switch (field.Key)
+            {
+                case "Title": changes.Title = value; break;
+                case "Author": changes.Author = value; break;
+                case "Subject": changes.Subject = value; break;
+                case "Keywords": changes.Keywords = value; break;
+                case "Creator": changes.Creator = value; break;
+                case "Producer": changes.Producer = value; break;
+            }
+        }
+
+        foreach (var key in _removedCustomKeys)
+        {
+            changes.Remove.Add(key);
+        }
+
+        foreach (var row in _customRows)
+        {
+            var key = row.Key.Trim();
+            if (row.OriginalKey is not null && row.OriginalKey != key)
+            {
+                changes.Remove.Add(row.OriginalKey);
+            }
+
+            if (key.Length == 0 || (key == row.OriginalKey && row.Value == row.OriginalValue))
+            {
+                continue;
+            }
+
+            if (row.Value.Length == 0)
+            {
+                changes.Remove.Add(key);
+            }
+            else
+            {
+                changes.CustomProperties[key] = row.Value;
+            }
+        }
+
+        return changes;
+    }
+}

@@ -1,0 +1,126 @@
+@page "/merge"
+@inherits OperationPage
+@inject IPdfPageEditor Editor
+
+<PageTitle>Merge · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Merge</h1>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <PdfFileInput Label="Add a PDF" File="null" FileChanged="AddFile" Disabled="Busy" />
+
+        @if (_inputs.Count > 0)
+        {
+            <p class="small text-muted mb-2">Drag the files into the order you want (or use the arrows).</p>
+            <ul class="list-group mb-3">
+                @for (var i = 0; i < _inputs.Count; i++)
+                {
+                    var index = i;
+                    var input = _inputs[index];
+                    <li class="list-group-item @(index == _over ? "list-group-item-primary" : "")" draggable="true"
+                        @ondragstart="() => _dragged = index" @ondragover="() => _over = index" @ondragover:preventDefault
+                        @ondrop="() => Drop(index)" @ondragend="() => _over = -1">
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                            <span class="fw-semibold text-break" style="cursor: grab">☰ @(index + 1). @input.File.Name</span>
+                            <span class="d-flex gap-1">
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => Move(index, -1)" disabled="@(index == 0)" aria-label="Move up">↑</button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => Move(index, 1)" disabled="@(index == _inputs.Count - 1)" aria-label="Move down">↓</button>
+                                <button class="btn btn-outline-danger btn-sm" @onclick="() => _inputs.RemoveAt(index)" aria-label="Remove">✕</button>
+                            </span>
+                        </div>
+                        <div class="row g-2 mt-1">
+                            <div class="col-sm-6"><input class="form-control form-control-sm" placeholder="Pages (all)" @bind="input.Range" /></div>
+                            <div class="col-sm-6"><input class="form-control form-control-sm" type="password" placeholder="Password (if protected)" @bind="input.Password" autocomplete="off" /></div>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="outlines">Bookmarks</label>
+            <select id="outlines" class="form-select" @bind="_outlines" disabled="@Busy">
+                <option value="@PdfMergeOutlineMode.PerDocument">One bookmark per document, with its bookmarks inside</option>
+                <option value="@PdfMergeOutlineMode.Flat">All bookmarks, one after the other</option>
+                <option value="@PdfMergeOutlineMode.None">No bookmarks</option>
+            </select>
+        </div>
+        <Check Id="dedupe" Label="Share identical fonts and images (smaller file)" @bind-Value="_deduplicate" Disabled="Busy" />
+        <button class="btn btn-primary mt-3" @onclick="MergeAsync" disabled="@(Busy || _inputs.Count < 2)">Merge @_inputs.Count files</button>
+        <ProgressDisplay Progress="CurrentProgress" />
+    </div>
+
+    <div class="col-lg-5">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null && _output is not null)
+        {
+            <OperationResult Title="Merged" FileName="merged.pdf" Data="_output" Warnings="_result.Warnings"
+                             Details="@(new[] { ("Pages", _result.PageCount.ToString()), ("Pages per file", string.Join(" + ", _result.PagesPerInput)), ("Shared objects", _result.DeduplicatedObjects.ToString()) })" />
+        }
+    </div>
+</div>
+
+@code {
+    private sealed class Input
+    {
+        public required UploadedPdf File { get; init; }
+
+        public string? Range { get; set; }
+
+        public string? Password { get; set; }
+    }
+
+    private readonly List<Input> _inputs = new();
+    private int _dragged = -1;
+    private int _over = -1;
+    private PdfMergeOutlineMode _outlines = PdfMergeOutlineMode.PerDocument;
+    private bool _deduplicate;
+    private PdfMergeResult? _result;
+    private byte[]? _output;
+
+    private void AddFile(UploadedPdf? file)
+    {
+        if (file is not null)
+        {
+            _inputs.Add(new Input { File = file });
+            _result = null;
+        }
+    }
+
+    private void Move(int index, int delta)
+    {
+        var item = _inputs[index];
+        _inputs.RemoveAt(index);
+        _inputs.Insert(index + delta, item);
+    }
+
+    private void Drop(int target)
+    {
+        if (_dragged >= 0 && _dragged != target)
+        {
+            var item = _inputs[_dragged];
+            _inputs.RemoveAt(_dragged);
+            _inputs.Insert(target, item);
+        }
+
+        _dragged = -1;
+        _over = -1;
+    }
+
+    private Task MergeAsync() => RunAsync(async (ct, progress) =>
+    {
+        var inputs = _inputs.Select(i => PdfMergeInput.FromBytes(i.File.Bytes, Optional(i.Password), string.IsNullOrWhiteSpace(i.Range) ? null : PdfPageRange.Parse(i.Range))).ToList();
+        var options = new PdfMergeOptions { Outlines = _outlines, DeduplicateResources = _deduplicate, Progress = progress };
+        (_result, _output) = await Task.Run(async () =>
+        {
+            using var buffer = new MemoryStream();
+            var result = await Editor.MergeAsync(inputs, buffer, options, ct);
+            return (result, buffer.ToArray());
+        });
+    });
+}

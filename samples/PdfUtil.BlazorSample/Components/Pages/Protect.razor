@@ -1,0 +1,178 @@
+@page "/protect"
+@inherits OperationPage
+@inject IPdfProtector Protector
+
+<PageTitle>Protect a PDF · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Protect a PDF</h1>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <PdfFileInput Label="PDF to protect" File="_file" FileChanged="OnFileChanged" Disabled="Busy" />
+
+        <PasswordInput Label="Password to open" @bind-Value="_userPassword" Disabled="Busy"
+                       Help="Leave empty to let anyone open the file; the permissions below still apply." />
+        <PasswordInput Label="Owner password" @bind-Value="_ownerPassword" Disabled="Busy"
+                       Help="Grants full access. If empty, a random one is used and the restrictions can't be lifted." />
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="algorithm">Algorithm</label>
+            <select id="algorithm" class="form-select" @bind="_algorithm" disabled="@Busy">
+                <option value="@PdfEncryptionAlgorithm.Aes256">AES-256 (recommended)</option>
+                <option value="@PdfEncryptionAlgorithm.Aes128">AES-128 (for readers older than about 2008)</option>
+                <option value="@PdfEncryptionAlgorithm.Rc4_128">RC4-128 (legacy, weak)</option>
+            </select>
+        </div>
+
+        <PermissionsPicker @bind-Value="_permissions" Disabled="Busy" />
+
+        <fieldset class="mb-3" disabled="@Busy">
+            <legend class="form-label fw-semibold fs-6">Options</legend>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="encryptMetadata" @bind="_encryptMetadata" />
+                <label class="form-check-label" for="encryptMetadata">Encrypt XMP metadata</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="pdfa" @bind="_pdfAProceed" />
+                <label class="form-check-label" for="pdfa">Encrypt PDF/A files anyway (they stop being PDF/A)</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="spec" @bind="_specificationPolicy" />
+                <label class="form-check-label" for="spec">Allow any password the PDF specification allows (some viewers may reject it)</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="reencrypt" @bind="_reEncrypt" />
+                <label class="form-check-label" for="reencrypt">The PDF is already protected: re-encrypt it</label>
+            </div>
+        </fieldset>
+
+        @if (_reEncrypt)
+        {
+            <PasswordInput Label="Current owner password" @bind-Value="_currentOwnerPassword" Disabled="Busy" AutoComplete="current-password" />
+        }
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="editInfo" @bind="_editInfo" disabled="@Busy" />
+                    <label class="form-check-label fw-semibold" for="editInfo">Change document information</label>
+                </div>
+            </div>
+            @if (_editInfo)
+            {
+                <div class="card-body">
+                    <InfoChangesEditor @ref="_infoEditor" File="_file" Disabled="Busy" />
+                </div>
+            }
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" @onclick="ProtectAsync" disabled="@(Busy || _file is null)">
+                @if (Busy)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                }
+                Protect
+            </button>
+            @if (Busy)
+            {
+                <button class="btn btn-outline-secondary" @onclick="Cancel">Cancel</button>
+            }
+        </div>
+        <ProgressDisplay Progress="CurrentProgress" />
+    </div>
+
+    <div class="col-lg-5">
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @if (_result is not null && _output is not null)
+        {
+            <OperationResult Title="Protected" FileName="@_outputName" Data="_output" Details="ResultDetails()" Warnings="_result.Warnings" />
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private string? _userPassword;
+    private string? _ownerPassword;
+    private string? _currentOwnerPassword;
+    private PdfEncryptionAlgorithm _algorithm = PdfEncryptionAlgorithm.Aes256;
+    private PdfPermissions _permissions = PermissionsPicker.Default;
+    private bool _encryptMetadata = true;
+    private bool _pdfAProceed;
+    private bool _specificationPolicy;
+    private bool _reEncrypt;
+    private bool _editInfo;
+    private InfoChangesEditor? _infoEditor;
+
+    private PdfProtectionResult? _result;
+    private byte[]? _output;
+    private string _outputName = "";
+
+    private void OnFileChanged(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        _output = null;
+        Error = null;
+    }
+
+    private IReadOnlyList<(string, string)> ResultDetails()
+    {
+        var details = new List<(string, string)>
+        {
+            ("Algorithm", $"{_result!.Algorithm} (revision {_result.Revision})"),
+            ("PDF version", $"{_result.SourceVersion} → {_result.OutputVersion}"),
+        };
+        if (_result.DocumentInfoChanged)
+        {
+            details.Add(("Document info", "Updated" + (_result.XmpUpdated ? " (including XMP)" : "")));
+        }
+
+        return details;
+    }
+
+    private Task ProtectAsync()
+    {
+        var file = _file;
+        if (file is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        _result = null;
+        _output = null;
+        var infoChanges = _editInfo ? _infoEditor?.BuildChanges() : null;
+        return RunAsync(async (ct, progress) =>
+        {
+            var options = new PdfProtectionOptions
+            {
+                UserPassword = _userPassword,
+                OwnerPassword = _ownerPassword,
+                Algorithm = _algorithm,
+                Permissions = _permissions,
+                EncryptMetadata = _encryptMetadata,
+                PdfAPolicy = _pdfAProceed ? PdfAPolicy.Proceed : PdfAPolicy.Throw,
+                PasswordPolicy = _specificationPolicy ? PdfPasswordPolicy.Specification : PdfPasswordPolicy.Interoperable,
+                AlreadyEncryptedPolicy = _reEncrypt ? AlreadyEncryptedPolicy.ReEncryptWithOwnerPassword : AlreadyEncryptedPolicy.Throw,
+                CurrentOwnerPassword = _reEncrypt ? _currentOwnerPassword : null,
+                InfoChanges = infoChanges,
+                Progress = progress,
+            };
+
+            // The library parses and encrypts on the calling thread; Task.Run keeps the UI responsive.
+            (_result, _output) = await Task.Run(async () =>
+            {
+                using var input = file.OpenRead();
+                using var buffer = new MemoryStream();
+                var r = await Protector.ProtectAsync(input, buffer, options, ct);
+                return (r, buffer.ToArray());
+            });
+            _outputName = Path.GetFileNameWithoutExtension(file.Name) + "-protected.pdf";
+        });
+    }
+}

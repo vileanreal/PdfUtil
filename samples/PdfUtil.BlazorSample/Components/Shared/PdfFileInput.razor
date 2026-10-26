@@ -1,0 +1,79 @@
+@* Picks a PDF in the browser and uploads it into memory (up to SampleLimits.MaxUploadBytes). *@
+
+<div class="mb-3">
+    <label class="form-label fw-semibold" for="@_id">@Label</label>
+    <InputFile id="@_id" class="form-control" accept=".pdf,application/pdf" OnChange="LoadAsync" disabled="@(Disabled || _loading)" />
+    @if (_loading)
+    {
+        <div class="form-text">Uploading…</div>
+    }
+    else if (_error is not null)
+    {
+        <div class="text-danger small mt-1">@_error</div>
+    }
+    else if (File is not null)
+    {
+        <div class="form-text">@File.Name · @FormatSize(File.Bytes.Length)</div>
+    }
+    else
+    {
+        <div class="form-text">PDF files up to @FormatSize(SampleLimits.MaxUploadBytes).</div>
+    }
+</div>
+
+@code {
+    private readonly string _id = "file-" + Guid.NewGuid().ToString("N");
+    private bool _loading;
+    private string? _error;
+
+    /// <summary>Label shown above the picker.</summary>
+    [Parameter] public string Label { get; set; } = "PDF file";
+
+    /// <summary>The uploaded file, or null.</summary>
+    [Parameter] public UploadedPdf? File { get; set; }
+
+    /// <summary>Raised when a file was uploaded or cleared.</summary>
+    [Parameter] public EventCallback<UploadedPdf?> FileChanged { get; set; }
+
+    /// <summary>Disables the picker, e.g. while an operation runs.</summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _loading = true;
+        try
+        {
+            if (e.File.Size > SampleLimits.MaxUploadBytes)
+            {
+                _error = $"The file is larger than {FormatSize(SampleLimits.MaxUploadBytes)}.";
+                await FileChanged.InvokeAsync(null);
+                return;
+            }
+
+            using var buffer = new MemoryStream();
+            await using (var upload = e.File.OpenReadStream(SampleLimits.MaxUploadBytes))
+            {
+                await upload.CopyToAsync(buffer);
+            }
+
+            await FileChanged.InvokeAsync(new UploadedPdf(e.File.Name, buffer.ToArray()));
+        }
+        catch (IOException ex)
+        {
+            _error = "The upload failed: " + ex.Message;
+            await FileChanged.InvokeAsync(null);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    internal static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1024 * 1024 => $"{bytes / 1024d / 1024d:0.#} MB",
+        >= 1024 => $"{bytes / 1024d:0.#} KB",
+        _ => $"{bytes} bytes",
+    };
+}

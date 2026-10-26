@@ -1,0 +1,82 @@
+@page "/verify-signatures"
+@inherits OperationPage
+@inject IPdfSigner Signer
+
+<PageTitle>Verify signatures · PdfUtil sample</PageTitle>
+
+<h1 class="mb-4">Verify signatures</h1>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <PdfFileInput File="_file" FileChanged="OnFileChanged" Disabled="Busy" />
+        <PasswordInput Label="Password (if protected)" @bind-Value="_password" Disabled="Busy" AutoComplete="current-password" />
+        <Check Id="chain" Label="Also check the certificate chains against this server's trusted certificates" @bind-Value="_chain" Disabled="Busy" />
+        <button class="btn btn-primary mt-3" @onclick="VerifyAsync" disabled="@(Busy || _file is null)">Verify</button>
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger mt-4" role="alert">@Error</div>
+        }
+    </div>
+
+    <div class="col-lg-7">
+        @if (_result is not null)
+        {
+            @if (_result.Signatures.Count == 0)
+            {
+                <div class="alert alert-secondary">This document has no signatures.</div>
+            }
+
+            @foreach (var s in _result.Signatures)
+            {
+                <div class="card mb-3 @(s.IsValid ? "border-success" : "border-danger")">
+                    <div class="card-header @(s.IsValid ? "bg-success" : "bg-danger") text-white">
+                        @(s.IsValid ? "Valid" : "Not valid"): @s.FieldName@(s.IsDocumentTimestamp ? " (document timestamp)" : "")
+                    </div>
+                    <div class="card-body">
+                        <dl class="row small mb-0">
+                            <dt class="col-5">Signed by</dt><dd class="col-7">@(s.SignerName ?? "Unknown")</dd>
+                            <dt class="col-5">Format</dt><dd class="col-7">@s.SubFilter, @s.DigestAlgorithm</dd>
+                            <dt class="col-5">Signing time</dt><dd class="col-7">@(s.SigningTime?.ToString("u") ?? "Not given")</dd>
+                            <dt class="col-5">Timestamp</dt><dd class="col-7">@(s.TimestampTime?.ToString("u") ?? "None")</dd>
+                            <dt class="col-5">Covers</dt><dd class="col-7">@(s.CoversWholeFile ? "The whole file" : $"Revision {s.Revision}; changed afterwards: {string.Join(", ", s.ChangesAfterSigning)}")</dd>
+                            <dt class="col-5">Bytes unchanged</dt><dd class="col-7">@(s.DigestMatches ? "Yes" : "No")</dd>
+                            @if (s.ChainIsValid is bool chain)
+                            {
+                                <dt class="col-5">Certificate chain</dt><dd class="col-7">@(chain ? "Trusted" : "Not trusted: " + string.Join(", ", s.ChainStatus))</dd>
+                            }
+                        </dl>
+                        @foreach (var problem in s.Problems)
+                        {
+                            <div class="alert alert-warning py-2 small mt-2 mb-0">@problem</div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private UploadedPdf? _file;
+    private string? _password;
+    private bool _chain;
+    private PdfSignatureVerificationResult? _result;
+
+    private void OnFileChanged(UploadedPdf? file)
+    {
+        _file = file;
+        _result = null;
+        Error = null;
+    }
+
+    private Task VerifyAsync() => RunAsync(async (ct, _) =>
+    {
+        var file = _file!;
+        var options = new PdfSignatureVerificationOptions { Password = Optional(_password), ChainPolicy = _chain ? new System.Security.Cryptography.X509Certificates.X509ChainPolicy() : null };
+        _result = await Task.Run(async () =>
+        {
+            using var stream = file.OpenRead();
+            return await Signer.VerifyAsync(stream, options, ct);
+        });
+    });
+}
