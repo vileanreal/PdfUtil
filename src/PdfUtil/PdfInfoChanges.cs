@@ -9,7 +9,7 @@ namespace PdfUtil;
 public sealed class PdfInfoChanges
 {
     /// <summary>Keys of the standard Info entries, which have typed properties.</summary>
-    internal static readonly IReadOnlySet<string> StandardKeys = new HashSet<string>(StringComparer.Ordinal)
+    internal static readonly HashSet<string> StandardKeys = new HashSet<string>(StringComparer.Ordinal)
     {
         "Title", "Author", "Subject", "Keywords", "Creator", "Producer", "CreationDate", "ModDate", "Trapped",
     };

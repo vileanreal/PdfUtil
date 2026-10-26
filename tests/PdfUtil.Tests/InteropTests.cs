@@ -147,11 +147,14 @@ public class InteropTests
         var stampPng = PdfUtil.Internal.Images.ImageCodecs.EncodePng(2, 2, 4, new byte[] { 255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 0, 0, 0, 0 });
         yield return new Sample("stamp-png", Pdf.Stamp(new TestPdfBuilder().Build(), new PdfStampOptions { Image = stampPng, ImageWidth = 144, Position = PdfStampPosition.TopRight }, out _), "", "", 2, "Test document", Encrypted: false);
 
-        // Phase 6: signed documents (certificate-encrypted ones are not supported by pdf.js or PDFKit).
+#if !NETFRAMEWORK
+        // Phase 6: signed documents (certificate-encrypted ones are not supported by pdf.js or PDFKit). The test
+        // certificates need .NET 8 APIs.
         var signedOnce = SignatureTests.Sign(new TestPdfBuilder().Build(), new PdfUtil.Signatures.PdfSignOptions { Certificate = TestCertificates.Rsa() }, out _);
         yield return new Sample("signed-invisible", signedOnce, "", "", 2, "Test document", Encrypted: false);
         yield return new Sample("signed-twice", SignatureTests.Sign(signedOnce, new PdfUtil.Signatures.PdfSignOptions { Certificate = TestCertificates.Ecdsa(), Appearance = new PdfUtil.Signatures.PdfSignatureAppearance { Page = 2 } }, out _), "", "", 2, "Test document", Encrypted: false);
         yield return new Sample("signed-visible-objstm", SignatureTests.Sign(new TestPdfBuilder { Mode = XrefMode.XrefStreamWithObjectStreams, Rich = true }.Build(), new PdfUtil.Signatures.PdfSignOptions { Certificate = TestCertificates.Rsa(), FieldName = "approval", Appearance = new PdfUtil.Signatures.PdfSignatureAppearance() }, out _), "", "", 2, "Test document", Encrypted: false);
+#endif
 
         // Phase 7c: HTML converted to PDF (embedded TrueType subsets, tables, images, links, bookmarks, footers).
         foreach (var (name, pdf) in HtmlToPdfTests.InteropSamples())

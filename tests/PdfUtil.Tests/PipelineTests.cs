@@ -196,6 +196,8 @@ public class PipelineTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => PdfPipeline.FromBytes(Doc(1)).Watermark("A").ToBytesAsync(cts.Token));
     }
 
+#if !NETFRAMEWORK
+    // The test certificates need .NET 8 APIs.
     [Fact]
     public async Task Sign_AsLastStep_IsValid()
     {
@@ -211,6 +213,7 @@ public class PipelineTests
         Assert.True(signature.CoversWholeFile);
         Assert.True(HasText(pdf, "SIGNED COPY"));
     }
+#endif
 
     [Fact]
     public async Task Factory_FromDependencyInjection_UsesApplicationOptions()

@@ -72,7 +72,10 @@ public sealed class PdfCertificateDecryptOptions
     /// <summary>A recipient's certificate, with its private key unless <see cref="PrivateKey"/> is set. Required.</summary>
     public X509Certificate2? Certificate { get; set; }
 
-    /// <summary>The recipient's RSA private key, when it is not attached to <see cref="Certificate"/>.</summary>
+    /// <summary>
+    /// The recipient's RSA private key, when it is not attached to <see cref="Certificate"/>. Not supported on
+    /// .NET Framework, where decrypting throws <see cref="PlatformNotSupportedException"/> if it is set.
+    /// </summary>
     public System.Security.Cryptography.RSA? PrivateKey { get; set; }
 
     /// <summary>

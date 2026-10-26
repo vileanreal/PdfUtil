@@ -55,7 +55,7 @@ internal static class TestFont
                 at += 2;
             }
 
-            return g[..at];
+            return g.AsSpan(0, at).ToArray();
         }
 
         void AddGlyph(byte[] data)

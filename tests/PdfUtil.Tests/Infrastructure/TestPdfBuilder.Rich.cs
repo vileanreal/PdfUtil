@@ -379,7 +379,7 @@ internal sealed partial class TestPdfBuilder
         if (CorruptFlate)
         {
             var content = list.First(o => o.Number == ((PdfReference)page1["Contents"]!).Id.Number);
-            content.Data = content.Data![..(content.Data.Length / 2)];
+            content.Data = content.Data!.AsSpan(0, content.Data!.Length / 2).ToArray();
             add(new PdfDictionary { ["Filter"] = N("FlateDecode") }, Enumerable.Range(0, 64).Select(i => (byte)(i * 37 + 5)).ToArray());
         }
 

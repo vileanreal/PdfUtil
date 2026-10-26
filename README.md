@@ -1,6 +1,6 @@
 # PdfUtil
 
-A PDF helper library for .NET 8. It can:
+A PDF helper library for .NET 8 and .NET Framework 4.6.2 through 4.8.1 (see [.NET Framework](#net-framework)). It can:
 
 1. **Protect.** It encrypts a PDF with a user password, an owner password, or both, plus permission flags.
 2. **Verify passwords.** It reports whether a password opens a PDF and whether it matched as the *user* or the *owner* password.
@@ -32,6 +32,18 @@ Everything works for PDF 1.0 through 2.0, and every file PdfUtil writes is verif
 | `docs/index.html` | HTML documentation: tutorial, guides and API reference |
 | `docs/manual-compat-checklist.md` | Manual viewer checklist |
 | `docs/requirements-traceability.md` | Requirement → code → test map |
+
+## .NET Framework
+
+The libraries (`PdfUtil`, `PdfUtil.Signatures`, `PdfUtil.Conversion` and `PdfUtil.Extensions.DependencyInjection`) are built for both `net8.0` and `net462`. The `net462` build runs on .NET Framework 4.6.2, 4.7.x, 4.8 and 4.8.1, and has the same API. The command-line tool and the samples are .NET 8 only.
+
+* **Building.** The `net462` build uses C# 14 extension members to supply newer BCL APIs (`src/PdfUtil/Internal/Compatibility`), so it needs the .NET 10 SDK (Visual Studio 2026 / MSBuild 18) or later. Older SDKs build only `net8.0`. Building on Linux or macOS works too, because the .NET Framework reference assemblies come from NuGet.
+* **Dependencies.** On .NET Framework the packages also depend on `System.Memory`, `System.ValueTuple`, `Microsoft.Bcl.AsyncInterfaces`, `Microsoft.Bcl.HashCode` and `Microsoft.Bcl.Memory` (and `System.Formats.Asn1` for signatures).
+* **Differences.** Everything works the same, except:
+  * **Signing** needs an RSA certificate with its private key attached (for example loaded from a PFX). `PdfSignOptions.PrivateKey` and ECDSA keys throw `PlatformNotSupportedException`, because .NET Framework's `SignedCms` cannot use them. Timestamps (`TimestampServer`) are supported.
+  * **Certificate decryption** needs the recipient certificate with its private key attached. `PdfCertificateDecryptOptions.PrivateKey` throws `PlatformNotSupportedException`.
+  * **Unicode.** SASLprep (AES-256 passwords) uses .NET Framework's character data and Windows' normalization, which cover older Unicode versions than .NET 8, so a password with very new characters can be prepared differently.
+  * **Performance.** Span-based APIs are emulated with temporary arrays, so the `net462` build allocates more than `net8.0`.
 
 ## Usage
 
@@ -863,6 +875,8 @@ Invalid options throw `ArgumentException`. An incremental save of an encrypted o
 ```bash
 dotnet test
 ```
+
+With the .NET 10 SDK the tests also build for `net48` (they create certificates with `CertificateRequest`, which needs 4.7.2) and run on Windows. (Under Mono they also run, apart from 5 tests that hit Mono's own NFKC normalization and `DeflateStream` error type.) The signature, certificate-encryption and CLI tests are .NET 8 only, because their test certificates and fake time-stamping authority use .NET 8 APIs. The RFC 3161 code that the .NET Framework build uses instead of the .NET 8 classes is tested on .NET 8 against those classes (`Rfc3161CompatTests`).
 
 The suite includes:
 

@@ -270,7 +270,11 @@ public class AttachmentTests
             options.Progress = new RepairTests.SyncProgress(p => stages.Add(p.Stage));
             await manager.AddAttachmentFileAsync(path, path, options);
             Assert.Equal(3, stages.Count);
+#if NETFRAMEWORK
+            using (var stream = File.OpenRead(path))
+#else
             await using (var stream = File.OpenRead(path))
+#endif
             {
                 Assert.Equal(Xml, await manager.ExtractAttachmentAsync(stream, "invoice.xml"));
             }

@@ -89,7 +89,7 @@ public class IncrementalTests
     public void EditInfo_FileWithoutTrailingNewline()
     {
         var input = new TestPdfBuilder().Build();
-        var trimmed = input[..^1]; // drop the final '\n' after %%EOF
+        var trimmed = input.AsSpan(0, input.Length - 1).ToArray(); // drop the final '\n' after %%EOF
         var output = Pdf.EditInfo(trimmed, Incremental(), out _);
         Assert.Equal("Appended title", Pdf.GetInfo(output).Info!.Title);
         Assert.Equal((byte)'\n', output[trimmed.Length]);
@@ -243,7 +243,7 @@ public class IncrementalTests
         // The value written into the reserved space is the hash of exactly the signed byte ranges.
         using var outDoc = TestHelpers.Open(result);
         var value = ((PdfString)((PdfDictionary)outDoc.GetObject(sigNumber)!)["Contents"]!).Value;
-        Assert.Equal(System.Security.Cryptography.SHA256.HashData(hashedRanges!), value[..32]);
+        Assert.Equal(System.Security.Cryptography.SHA256.HashData(hashedRanges!), value.AsSpan(0, 32).ToArray());
         Assert.Throws<ArgumentException>(() => contents.Encode(new byte[257]));
     }
 }

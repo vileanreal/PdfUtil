@@ -3,6 +3,8 @@
   <PropertyGroup>
     <RootNamespace>PdfUtil.Conversion</RootNamespace>
     <AssemblyName>PdfUtil.Conversion</AssemblyName>
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>$(PdfUtilLibraryTargetFrameworks)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
     <PackageId>PdfUtil.Conversion</PackageId>
@@ -13,6 +15,10 @@
     <ProjectReference Include="../PdfUtil/PdfUtil.csproj" />
     <InternalsVisibleTo Include="PdfUtil.Tests" />
     <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$(TargetFramework.StartsWith('net4'))">
+    <Reference Include="System.IO.Compression" />
   </ItemGroup>
 
 </Project>

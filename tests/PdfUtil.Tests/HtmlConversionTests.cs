@@ -288,7 +288,7 @@ public class HtmlConversionTests
         var stencil = stencilDoc.AddImage(RawPdf.Stream("/Type /XObject /Subtype /Image /Width 8 /Height 1 /ImageMask true /Filter /ASCIIHexDecode", "0F>"));
         stencilDoc.Page().Text(72, 700, 12, "Mask").Raw($"q 0 0 1 rg 80 0 0 10 72 600 cm /{stencil} Do Q");
         var mask = ImageCodecs.DecodePng(Png(Convert(stencilDoc.Build()).Html), 100);
-        Assert.Equal(new byte[] { 0, 0, 255 }, mask.Samples[..3]);
+        Assert.Equal(new byte[] { 0, 0, 255 }, mask.Samples.AsSpan(0, 3).ToArray());
         Assert.Equal(new byte[] { 255, 255, 255, 255, 0, 0, 0, 0 }, mask.Alpha);
     }
 

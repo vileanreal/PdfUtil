@@ -398,7 +398,11 @@ public sealed class PdfPageEditor : IPdfPageEditor
         }
 
         ComposeEngine.Validate(options);
+#if NETFRAMEWORK
+        using var stream = new FileStream(inputPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.RandomAccess);
+#else
         await using var stream = new FileStream(inputPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.RandomAccess);
+#endif
         using var source = await InputBuffer.OpenAsync(stream, _options, ct).ConfigureAwait(false);
         return Guard.Run(() => Composer.Split(source, options, (part, buffer) =>
         {

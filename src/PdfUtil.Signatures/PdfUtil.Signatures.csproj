@@ -3,6 +3,8 @@
   <PropertyGroup>
     <RootNamespace>PdfUtil.Signatures</RootNamespace>
     <AssemblyName>PdfUtil.Signatures</AssemblyName>
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>$(PdfUtilLibraryTargetFrameworks)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
     <PackageId>PdfUtil.Signatures</PackageId>
@@ -11,6 +13,13 @@
 
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$(TargetFramework.StartsWith('net4'))">
+    <PackageReference Include="System.Formats.Asn1" Version="8.0.2" />
+    <Reference Include="System.Net.Http" />
+    <Using Include="System.Net.Http" />
+    <Reference Include="System.Security" />
   </ItemGroup>
 
   <ItemGroup>

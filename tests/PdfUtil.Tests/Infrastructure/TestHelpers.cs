@@ -65,17 +65,25 @@ internal static class TestHelpers
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+#if NETFRAMEWORK
+        psi.Arguments = string.Join(" ", args.Select(a => "\"" + a.Replace("\"", "\\\"") + "\""));
+#else
         foreach (var a in args)
         {
             psi.ArgumentList.Add(a);
         }
+#endif
 
         using var p = Process.Start(psi)!;
         var stdout = p.StandardOutput.ReadToEndAsync();
         var stderr = p.StandardError.ReadToEndAsync();
         if (!p.WaitForExit(120_000))
         {
+#if NETFRAMEWORK
+            p.Kill();
+#else
             p.Kill(entireProcessTree: true);
+#endif
             return (-1, "timeout");
         }
 

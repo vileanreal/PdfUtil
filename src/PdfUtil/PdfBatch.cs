@@ -262,7 +262,11 @@ public sealed class PdfBatchProcessor : IPdfBatchProcessor
     public Task<PdfBatchResult<string, PdfDocumentInfo>> InspectFilesAsync(IEnumerable<string> paths, string? password = null, PdfBatchOptions? batchOptions = null, CancellationToken ct = default) =>
         RunAsync(paths, async (path, token) =>
         {
+#if NETFRAMEWORK
+            using var stream = OpenRead(path);
+#else
             await using var stream = OpenRead(path);
+#endif
             return await _inspector.GetInfoAsync(stream, password, token).ConfigureAwait(false);
         }, batchOptions, ct);
 
@@ -270,7 +274,11 @@ public sealed class PdfBatchProcessor : IPdfBatchProcessor
     public Task<PdfBatchResult<string, PdfPasswordCheckResult>> VerifyPasswordFilesAsync(IEnumerable<string> paths, string? password, PdfBatchOptions? batchOptions = null, CancellationToken ct = default) =>
         RunAsync(paths, async (path, token) =>
         {
+#if NETFRAMEWORK
+            using var stream = OpenRead(path);
+#else
             await using var stream = OpenRead(path);
+#endif
             return await _opener.VerifyPasswordAsync(stream, password, token).ConfigureAwait(false);
         }, batchOptions, ct);
 

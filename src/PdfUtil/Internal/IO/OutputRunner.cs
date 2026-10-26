@@ -19,7 +19,11 @@ internal static class OutputRunner
         }
 
         using var source = await InputBuffer.OpenAsync(input, options, ct).ConfigureAwait(false);
+#if NETFRAMEWORK
+        using var buffer = InputBuffer.CreateOutputBuffer(source.Length, options);
+#else
         await using var buffer = InputBuffer.CreateOutputBuffer(source.Length, options);
+#endif
         log.Info(description.Replace("{size}", source.Length.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal));
         var result = Guard.Run(() => work(source, buffer));
 
@@ -50,9 +54,15 @@ internal static class OutputRunner
         try
         {
             T result;
+#if NETFRAMEWORK
+            using (var input = new FileStream(fullInput, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.RandomAccess))
+            using (var source = new PdfSource(input, ownsStream: false))
+            using (var temp = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920, FileOptions.Asynchronous))
+#else
             await using (var input = new FileStream(fullInput, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.RandomAccess))
             using (var source = new PdfSource(input, ownsStream: false))
             await using (var temp = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920, FileOptions.Asynchronous))
+#endif
             {
                 if (source.Length > options.MaxFileSizeBytes)
                 {
@@ -96,7 +106,11 @@ internal static class OutputRunner
             throw new ArgumentException("The output stream is not writable.", nameof(output));
         }
 
+#if NETFRAMEWORK
+        using var buffer = InputBuffer.CreateOutputBuffer(0, options);
+#else
         await using var buffer = InputBuffer.CreateOutputBuffer(0, options);
+#endif
         var result = Guard.Run(() => work(buffer));
         buffer.Position = 0;
         await buffer.CopyToAsync(output, ct).ConfigureAwait(false);
@@ -197,7 +211,9 @@ internal sealed class NonDisposingStream : Stream
 
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _inner.ReadAsync(buffer, offset, count, cancellationToken);
 
+#if !NETFRAMEWORK
     public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => _inner.ReadAsync(buffer, cancellationToken);
+#endif
 
     public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
 

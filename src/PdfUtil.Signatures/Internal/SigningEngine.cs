@@ -62,6 +62,19 @@ internal sealed class SigningEngine
             throw new ArgumentException("Only RSA and ECDSA keys are supported for signing.", nameof(options));
         }
 
+#if NETFRAMEWORK
+        // .NET Framework's SignedCms signs only with the certificate's own key, and not with ECDSA.
+        if (options.PrivateKey is not null)
+        {
+            throw new PlatformNotSupportedException("On .NET Framework the private key must be attached to the certificate; PrivateKey is supported on .NET 8 and later.");
+        }
+
+        if (cert.GetRSAPublicKey() is null)
+        {
+            throw new PlatformNotSupportedException("On .NET Framework only RSA certificates can sign; ECDSA is supported on .NET 8 and later.");
+        }
+#endif
+
         if (DigestOid(options.DigestAlgorithm) is null)
         {
             throw new ArgumentException("DigestAlgorithm must be SHA256, SHA384 or SHA512.", nameof(options));
@@ -117,7 +130,7 @@ internal sealed class SigningEngine
 
     private static int EstimateSize(PdfSignOptions options)
     {
-        var certs = options.Certificate!.RawData.Length + (options.AdditionalCertificates?.Sum(c => c.RawData.Length) ?? 0);
+        var certs = options.Certificate!.RawData.Length + (options.AdditionalCertificates?.Cast<X509Certificate2>().Sum(c => c.RawData.Length) ?? 0);
         return certs + 2048 + (options.TimestampServer is null ? 0 : 8192);
     }
 
@@ -380,7 +393,11 @@ internal sealed class SigningEngine
     private static (byte[] Cms, DateTimeOffset? TimestampTime) CreateSignature(byte[] data, PdfSignOptions options, X509Certificate2 cert, CancellationToken ct)
     {
         var cms = new SignedCms(new ContentInfo(data), detached: true);
+#if NETFRAMEWORK
+        var signer = new CmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, cert)
+#else
         var signer = new CmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, cert, options.PrivateKey)
+#endif
         {
             DigestAlgorithm = new Oid(DigestOid(options.DigestAlgorithm)!),
             IncludeOption = X509IncludeOption.EndCertOnly,
@@ -393,6 +410,35 @@ internal sealed class SigningEngine
         signer.SignedAttributes.Add(new AsnEncodedData(new Oid(SigningCertificateV2Oid), SigningCertificateV2(cert)));
         cms.ComputeSignature(signer, silent: true);
         DateTimeOffset? time = null;
+#if NETFRAMEWORK
+        if (options.TimestampServer is { } tsa)
+        {
+            var encoded = cms.Encode();
+            var signature = Rfc3161.SignatureValue(encoded);
+            var nonce = RandomNumberGenerator.GetBytes(8);
+            using var body = new ByteArrayContent(Rfc3161.CreateRequest(signature, nonce));
+            body.Headers.ContentType = new MediaTypeHeaderValue("application/timestamp-query");
+            var client = options.TimestampHttpClient ?? SharedClient;
+            using var response = client.PostAsync(tsa, body, ct).ConfigureAwait(false).GetAwaiter().GetResult();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new PdfUtilException($"The timestamp server answered {(int)response.StatusCode} {response.ReasonPhrase}.");
+            }
+
+            var bytes = response.Content.ReadAsByteArrayAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+            TimestampToken token;
+            try
+            {
+                token = Rfc3161.ProcessResponse(bytes, signature, nonce);
+            }
+            catch (CryptographicException ex)
+            {
+                throw new PdfUtilException("The timestamp server's response is not a valid timestamp for this signature: " + ex.Message, ex);
+            }
+
+            return (Rfc3161.AddUnsignedAttribute(encoded, TimestampTokenOid, token.Encoded), token.Timestamp);
+        }
+#else
         if (options.TimestampServer is { } tsa)
         {
             var info = cms.SignerInfos[0];
@@ -420,6 +466,7 @@ internal sealed class SigningEngine
             info.AddUnsignedAttribute(new AsnEncodedData(new Oid(TimestampTokenOid), token.AsSignedCms().Encode()));
             time = token.TokenInfo.Timestamp;
         }
+#endif
 
         return (cms.Encode(), time);
     }

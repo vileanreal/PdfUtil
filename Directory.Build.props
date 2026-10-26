@@ -13,4 +13,36 @@
     <PackageTags>pdf;encryption;password;aes;metadata;xmp</PackageTags>
     <Version>1.0.0</Version>
   </PropertyGroup>
+
+  <!--
+    Libraries also target .NET Framework 4.6.2 (which runs on 4.6.2 through 4.8.1). That build uses C# 14
+    extension members to supply the newer BCL APIs, so it needs the .NET 10 SDK (MSBuild 18) or later; older SDKs
+    build only net8.0.
+  -->
+  <PropertyGroup>
+    <PdfUtilLibraryTargetFrameworks>net8.0</PdfUtilLibraryTargetFrameworks>
+    <PdfUtilTestTargetFrameworks>net8.0</PdfUtilTestTargetFrameworks>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(MSBuildVersion)', '18.0'))">
+    <PdfUtilLibraryTargetFrameworks>net8.0;net462</PdfUtilLibraryTargetFrameworks>
+    <!-- The tests run on 4.8: they create certificates with CertificateRequest, which needs 4.7.2. -->
+    <PdfUtilTestTargetFrameworks>net8.0;net48</PdfUtilTestTargetFrameworks>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(TargetFramework.StartsWith('net4'))">
+    <LangVersion>14.0</LangVersion>
+    <!-- The .NET Framework reference assemblies carry no nullable annotations; net8.0 does the checking. -->
+    <Nullable>annotations</Nullable>
+  </PropertyGroup>
+
+  <!-- .NET Framework 4.6.2+ support: back-ported BCL packages (the polyfills are in src/PdfUtil/Internal/Compatibility). -->
+  <ItemGroup Condition="$(TargetFramework.StartsWith('net4'))">
+    <PackageReference Include="System.Memory" Version="4.5.5" />
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Bcl.HashCode" Version="1.1.1" />
+    <PackageReference Include="Microsoft.Bcl.Memory" Version="9.0.22" />
+    <Using Remove="System.Net.Http" />
+  </ItemGroup>
 </Project>

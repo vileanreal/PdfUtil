@@ -84,7 +84,7 @@ internal sealed class CertificateSecurityEngine
         }
 
         var hash = v >= 5 ? SHA256.HashData(input.ToArray()) : SHA1.HashData(input.ToArray());
-        return hash[..keyBytes];
+        return hash.AsSpan(0, keyBytes).ToArray();
     }
 
     /// <summary>Opens a recipient blob with the certificate: returns the seed and permissions, or null if the certificate is not this recipient.</summary>
@@ -106,7 +106,12 @@ internal sealed class CertificateSecurityEngine
                     return null;
                 }
 
+#if NETFRAMEWORK
+                // .NET Framework's EnvelopedCms decrypts only with a certificate that carries its key.
+                throw new PlatformNotSupportedException("On .NET Framework the private key must be attached to the certificate; PrivateKey is supported on .NET 8 and later.");
+#else
                 envelope.Decrypt(recipient, privateKey);
+#endif
             }
 
             var content = envelope.ContentInfo.Content;
@@ -116,7 +121,7 @@ internal sealed class CertificateSecurityEngine
             }
 
             var permissions = (content[20] << 24) | (content[21] << 16) | (content[22] << 8) | content[23];
-            return (content[..20], permissions);
+            return (content.AsSpan(0, 20).ToArray(), permissions);
         }
         catch (CryptographicException)
         {

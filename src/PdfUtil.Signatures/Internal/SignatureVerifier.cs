@@ -130,6 +130,17 @@ internal sealed class SignatureVerifier
             {
                 if (isTimestamp)
                 {
+#if NETFRAMEWORK
+                    if (!TimestampToken.TryDecode(der, out var token))
+                    {
+                        throw new CryptographicException("The document timestamp is not an RFC 3161 timestamp token.");
+                    }
+
+                    signatureValid = digestMatches = token!.VerifySignatureForData(data, out signer);
+                    timestampTime = token.Timestamp;
+                    timestampValid = signatureValid;
+                    digestAlgorithm = HashName(token.HashAlgorithmId);
+#else
                     if (!Rfc3161TimestampToken.TryDecode(der, out var token, out _))
                     {
                         throw new CryptographicException("The document timestamp is not an RFC 3161 timestamp token.");
@@ -140,6 +151,7 @@ internal sealed class SignatureVerifier
                     timestampValid = signatureValid;
                     digestAlgorithm = HashName(token.TokenInfo.HashAlgorithmId.Value);
                     signer ??= token.AsSignedCms().SignerInfos.Count > 0 ? token.AsSignedCms().SignerInfos[0].Certificate : null;
+#endif
                 }
                 else
                 {
@@ -182,12 +194,21 @@ internal sealed class SignatureVerifier
                         signingTime = new Pkcs9SigningTime(time.Values[0].RawData).SigningTime;
                     }
 
+#if NETFRAMEWORK
+                    if (info.UnsignedAttributes.Cast<CryptographicAttributeObject>().FirstOrDefault(a => a.Oid.Value == TimestampTokenOid) is { } tsa
+                        && TimestampToken.TryDecode(tsa.Values[0].RawData, out var stamp))
+                    {
+                        timestampTime = stamp!.Timestamp;
+                        timestampValid = stamp.VerifySignatureForSignature(Rfc3161.SignatureValue(der), out _);
+                    }
+#else
                     if (info.UnsignedAttributes.Cast<CryptographicAttributeObject>().FirstOrDefault(a => a.Oid.Value == TimestampTokenOid) is { } tsa
                         && Rfc3161TimestampToken.TryDecode(tsa.Values[0].RawData, out var stamp, out _))
                     {
                         timestampTime = stamp.TokenInfo.Timestamp;
                         timestampValid = stamp.VerifySignatureForSignerInfo(info, out _);
                     }
+#endif
                 }
             }
             catch (CryptographicException ex)
@@ -326,7 +347,7 @@ internal sealed class SignatureVerifier
             header = 2 + n;
         }
 
-        return header + length <= bytes.Length ? bytes[..(int)(header + length)] : bytes;
+        return header + length <= bytes.Length ? bytes.AsSpan(0, (int)(header + length)).ToArray() : bytes;
     }
 
     private static byte[] ReadOctetString(byte[] der)

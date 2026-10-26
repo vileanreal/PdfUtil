@@ -36,7 +36,7 @@ internal sealed class HtmlModelBuilder
     }
 
     /// <summary>The ids that exist in the document (link targets).</summary>
-    public IReadOnlySet<string> Ids => _ids;
+    public IReadOnlyCollection<string> Ids => _ids;
 
     public List<Block> Build(Element root) => BlockChildren(root);
 

@@ -29,12 +29,16 @@ public interface IPdfSigner
 /// <summary>Settings for <see cref="IPdfSigner.SignAsync"/>.</summary>
 public sealed class PdfSignOptions
 {
-    /// <summary>The signing certificate (RSA or ECDSA), with its private key unless <see cref="PrivateKey"/> is set. Required.</summary>
+    /// <summary>
+    /// The signing certificate (RSA or ECDSA), with its private key unless <see cref="PrivateKey"/> is set. Required.
+    /// On .NET Framework only RSA certificates with an attached key can sign.
+    /// </summary>
     public X509Certificate2? Certificate { get; set; }
 
     /// <summary>
     /// The private key, when it is not attached to <see cref="Certificate"/> (for example a key from a hardware module
     /// or key vault exposed as <see cref="RSA"/> or <see cref="ECDsa"/>). Default <c>null</c>: the certificate's own key.
+    /// Not supported on .NET Framework, where signing throws <see cref="PlatformNotSupportedException"/> if it is set.
     /// </summary>
     public AsymmetricAlgorithm? PrivateKey { get; set; }
 

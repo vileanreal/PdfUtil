@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <RootNamespace>PdfUtil.Extensions.DependencyInjection</RootNamespace>
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>$(PdfUtilLibraryTargetFrameworks)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
     <PackageId>PdfUtil.Extensions.DependencyInjection</PackageId>

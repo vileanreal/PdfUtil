@@ -245,7 +245,7 @@ public class StampTests
     {
         // 2-bit gray, 4 pixels per byte: values 0,1,2,3 → 0, 85, 170, 255; filter 1 (Sub) on the second row.
         var twoBit = ImageCodecs.DecodePng(Png(4, 2, 2, 0, new byte[] { 0, 0b00011011, 1, 0b00011011 }), 1000);
-        Assert.Equal(new byte[] { 0, 85, 170, 255 }, twoBit.Samples[..4]);
+        Assert.Equal(new byte[] { 0, 85, 170, 255 }, twoBit.Samples.AsSpan(0, 4).ToArray());
 
         // 1-bit palette with a tRNS alpha table.
         var paletted = ImageCodecs.DecodePng(Png(2, 1, 1, 3, new byte[] { 0, 0b01000000 }, new byte[] { 0, 0, 0, 255, 255, 255 }, new byte[] { 0 }), 1000);

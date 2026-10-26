@@ -26,8 +26,13 @@ internal static class ConversionOutput
         byte[] main;
         T result;
         var assets = assetsFolder is null ? null : new Dictionary<string, byte[]>(StringComparer.Ordinal);
+#if NETFRAMEWORK
+        using (var input = new FileStream(fullInput, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.RandomAccess))
+        using (var source = new PdfSource(input, ownsStream: false))
+#else
         await using (var input = new FileStream(fullInput, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.RandomAccess))
         using (var source = new PdfSource(input, ownsStream: false))
+#endif
         {
             if (source.Length > options.MaxFileSizeBytes)
             {

@@ -372,7 +372,11 @@ public sealed class PdfConverter : IPdfConverter
         }
 
         byte[] data;
+#if NETFRAMEWORK
+        using (var input = new FileStream(fullInput, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous))
+#else
         await using (var input = new FileStream(fullInput, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous))
+#endif
         {
             data = await ReadLimitedAsync(input, ct).ConfigureAwait(false);
         }
@@ -418,7 +422,11 @@ public sealed class PdfConverter : IPdfConverter
         }
 
         byte[] data;
+#if NETFRAMEWORK
+        using (var input = new FileStream(fullInput, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous))
+#else
         await using (var input = new FileStream(fullInput, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous))
+#endif
         {
             data = await ReadLimitedAsync(input, ct).ConfigureAwait(false);
         }
