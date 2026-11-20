@@ -1,0 +1,72 @@
+# Builds the .NET Framework 4.8 Windows Forms sample on Windows, runs its self-test against the net462 build of
+# PdfUtil, and publishes the app as a GitHub release. Pushing a tag such as winforms-sample-v1.0.0 releases it;
+# running the workflow by hand only builds and tests (the zip and report are kept as workflow artifacts).
+name: WinForms sample release
+
+on:
+  push:
+    tags:
+      - 'winforms-sample-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The net462 build of PdfUtil needs the .NET 10 SDK (C# 14 extension members).
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet build samples/PdfUtil.WinFormsSample -c Release
+
+      - name: Self-test on .NET Framework
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path samples/PdfUtil.WinFormsSample/bin/Release/net48/PdfUtil.WinFormsSample.exe
+          $p = Start-Process -FilePath $exe -ArgumentList '--selftest', 'selftest-report.txt' -Wait -PassThru -NoNewWindow
+          Get-Content selftest-report.txt
+          exit $p.ExitCode
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { 'winforms-sample-dev' }
+          "ZIP_NAME=$name.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Compress-Archive -Path samples/PdfUtil.WinFormsSample/bin/Release/net48/* -DestinationPath "$name.zip"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: winforms-sample
+          path: |
+            ${{ env.ZIP_NAME }}
+            selftest-report.txt
+          if-no-files-found: ignore
+
+      - name: Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: PdfUtil WinForms sample (${{ github.ref_name }})
+          prerelease: true
+          files: |
+            ${{ env.ZIP_NAME }}
+            selftest-report.txt
+          body: |
+            The PdfUtil Windows Forms sample for .NET Framework 4.8, built from `${{ github.sha }}`.
+
+            It uses the .NET Framework (net462) build of PdfUtil. The **Self-test** tab runs 19 checks of every
+            feature (protection, inspection, text, page operations, attachments, repair, conversion, signing with an
+            RFC 3161 timestamp, certificate encryption); the **Your PDF** tab runs the same operations on your own
+            file. `selftest-report.txt` is the result of the self-test on the GitHub Windows runner; the release is
+            published only if every check passed.
+
+            **Run it:** unzip, then start `PdfUtil.WinFormsSample.exe`. Needs Windows with .NET Framework 4.8
+            (included in Windows 10 1903 and later). Without a window: `PdfUtil.WinFormsSample.exe --selftest report.txt`.
