@@ -1,6 +1,7 @@
 # Builds the .NET Framework 4.8 Windows Forms sample on Windows, runs its self-test against the net462 build of
-# PdfUtil, and publishes the app as a GitHub release. Pushing a tag such as winforms-sample-v1.0.0 releases it;
-# running the workflow by hand only builds and tests (the zip and report are kept as workflow artifacts).
+# PdfUtil, and publishes the app as a GitHub release. Pushing a tag such as winforms-sample-v1.0.0 releases it, and
+# so does running the workflow by hand with a release tag (the tag is then created on the commit it ran on). Without
+# one it only builds and tests; the zip and report are kept as workflow artifacts either way.
 name: WinForms sample release
 
 on:
@@ -8,6 +9,11 @@ on:
     tags:
       - 'winforms-sample-v*'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag to release as, such as winforms-sample-v1.0.0 (leave empty to only build and test)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -36,8 +42,10 @@ jobs:
 
       - name: Package
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
         run: |
-          $name = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { 'winforms-sample-dev' }
+          $name = if ($env:RELEASE_TAG) { $env:RELEASE_TAG } else { 'winforms-sample-dev' }
           "ZIP_NAME=$name.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
           Compress-Archive -Path samples/PdfUtil.WinFormsSample/bin/Release/net48/* -DestinationPath "$name.zip"
 
@@ -51,10 +59,12 @@ jobs:
           if-no-files-found: ignore
 
       - name: Release
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || inputs.release_tag != ''
         uses: softprops/action-gh-release@v2
         with:
-          name: PdfUtil WinForms sample (${{ github.ref_name }})
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
+          target_commitish: ${{ github.sha }}
+          name: PdfUtil WinForms sample (${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }})
           prerelease: true
           files: |
             ${{ env.ZIP_NAME }}
