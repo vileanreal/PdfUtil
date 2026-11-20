@@ -124,7 +124,7 @@ internal static class SelfTest
             {
                 var text = Pdf.Stamp(source.Value, new PdfStampOptions
                 {
-                    Text = "DRAFT",
+                    Text = "DRAFT\r\nInternal use",
                     FontSize = 72,
                     Color = PdfColor.FromHex("#C81E1E"),
                     Opacity = 0.5,
@@ -134,13 +134,14 @@ internal static class SelfTest
                     Layer = PdfStampLayer.Under,
                 }, out var textResult);
                 Require(textResult.StampedPages.SequenceEqual(new[] { 1 }), $"stamped pages {string.Join(", ", textResult.StampedPages)} instead of 1.");
-                Require(Pdf.ExtractText(text, new PdfTextExtractionOptions { Pages = PdfPageRange.Parse("1") }).Text.Contains("DRAFT"), "the text is not on page 1.");
+                var page1 = Pdf.ExtractText(text, new PdfTextExtractionOptions { Pages = PdfPageRange.Parse("1") }).Text;
+                Require(page1.Contains("DRAFT") && page1.Contains("Internal use"), "the two lines of text are not on page 1.");
                 Require(!Pdf.ExtractText(text, new PdfTextExtractionOptions { Pages = PdfPageRange.Parse("2") }).Text.Contains("DRAFT"), "the text is also on page 2.");
 
                 var image = Pdf.Stamp(source.Value, new PdfStampOptions { Image = Png(), ImageWidth = 200, Opacity = 0.4, Rotation = -15, Position = PdfStampPosition.BottomLeft }, out var imageResult);
                 Require(imageResult.StampedPages.Count == 2, $"the image was stamped on {imageResult.StampedPages.Count} pages.");
                 Require(Pdf.Inspect(image).Images.Count > Pdf.Inspect(source.Value).Images.Count, "the image is not in the output.");
-                return "red text at 50%, 30°, top right, page 1 only, behind the content; a PNG at 200 pt, 40%, -15°, bottom left";
+                return "two lines of red text at 50%, 30°, top right, page 1 only, behind the content; a PNG at 200 pt, 40%, -15°, bottom left";
             }),
             ("Rotate, delete, merge and split pages", () =>
             {

@@ -16,7 +16,7 @@ internal sealed class WatermarkDialog : Form
     private const double A4Height = 842;
 
     private readonly TabControl _kind = new() { Dock = DockStyle.Top, Height = 190 };
-    private readonly TextBox _text = new() { Multiline = true, Height = 46, Width = 330, Text = "CONFIDENTIAL", ScrollBars = ScrollBars.Vertical };
+    private readonly TextBox _text = new() { Multiline = true, AcceptsReturn = true, Height = 46, Width = 330, Text = "CONFIDENTIAL", ScrollBars = ScrollBars.Vertical };
     private readonly TextBox _fontPath = new() { Width = 180, ReadOnly = true };
     private readonly TrackBar _fontSize = new() { Minimum = 8, Maximum = 144, Value = 48, TickFrequency = 8, Width = 250 };
     private readonly Label _fontSizeLabel = new() { AutoSize = true };
