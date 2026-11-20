@@ -15,6 +15,7 @@ internal sealed class MainForm : Form
     private readonly Button _saveReport = new() { Text = "Save report…", AutoSize = true, Enabled = false };
     private readonly Label _summary = new() { AutoSize = true, Padding = new Padding(0, 6, 0, 0) };
     private readonly List<CheckResult> _lastRun = new();
+    private WatermarkDialog? _watermark;
 
     private readonly TextBox _file = new() { Width = 420 };
     private readonly TextBox _password = new() { Width = 160, UseSystemPasswordChar = true };
@@ -254,8 +255,41 @@ internal sealed class MainForm : Form
 
     private string Watermark()
     {
+        // The dialog is kept, so it opens with the previous settings.
+        PdfStampOptions? options = null;
+        string? summary = null;
+        Invoke(new Action(() =>
+        {
+            _watermark ??= new WatermarkDialog();
+            if (_watermark.ShowDialog(this) == DialogResult.OK)
+            {
+                options = _watermark.Options();
+                summary = _watermark.Summary();
+            }
+        }));
+        if (options is null)
+        {
+            return "Cancelled.";
+        }
+
         var output = AskOutput("-watermarked.pdf");
-        return output is null ? "Cancelled." : $"Wrote {output}: {Pdf.Stamp(_file.Text, output, new PdfStampOptions { Text = "CONFIDENTIAL", Password = PasswordOrNull })}";
+        if (output is null)
+        {
+            return "Cancelled.";
+        }
+
+        options.Password = PasswordOrNull;
+        var result = Pdf.Stamp(_file.Text, output, options);
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wrote {output}");
+        sb.AppendLine($"Watermark: {summary}");
+        sb.AppendLine($"Pages stamped: {string.Join(", ", result.StampedPages)}");
+        foreach (var warning in result.Warnings)
+        {
+            sb.AppendLine("Warning: " + warning);
+        }
+
+        return sb.ToString();
     }
 
     private string ToHtml()

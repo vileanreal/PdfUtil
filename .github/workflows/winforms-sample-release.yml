@@ -87,10 +87,11 @@ jobs:
           body: |
             The PdfUtil Windows Forms sample for .NET Framework 4.8, built from `${{ github.sha }}`.
 
-            It uses the .NET Framework (net462) build of PdfUtil. The **Self-test** tab runs 19 checks of every
+            It uses the .NET Framework (net462) build of PdfUtil. The **Self-test** tab runs 20 checks of every
             feature (protection, inspection, text, page operations, attachments, repair, conversion, signing with an
             RFC 3161 timestamp, certificate encryption); the **Your PDF** tab runs the same operations on your own
-            file. `selftest-report.txt` is the result of the self-test on the GitHub Windows runner; the release is
+            file; **Watermark…** opens a dialog with text or image, font, size, colour, opacity, rotation, position,
+            pages and layer, with a live preview. `selftest-report.txt` is the result of the self-test on the GitHub Windows runner; the release is
             published only if every check passed.
 
             **Run it:** unzip, then start `PdfUtil.WinFormsSample.exe`. Needs Windows with .NET Framework 4.8

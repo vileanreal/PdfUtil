@@ -120,6 +120,28 @@ internal static class SelfTest
                 Require(Pdf.ExtractText(pdf).Text.Contains("CONFIDENTIAL"), "the watermark text was not found.");
                 return $"stamped pages {string.Join(", ", result.StampedPages)}";
             }),
+            ("Watermark with custom options (as the Watermark dialog sets them)", () =>
+            {
+                var text = Pdf.Stamp(source.Value, new PdfStampOptions
+                {
+                    Text = "DRAFT",
+                    FontSize = 72,
+                    Color = PdfColor.FromHex("#C81E1E"),
+                    Opacity = 0.5,
+                    Rotation = 30,
+                    Position = PdfStampPosition.TopRight,
+                    Pages = PdfPageRange.Parse("1"),
+                    Layer = PdfStampLayer.Under,
+                }, out var textResult);
+                Require(textResult.StampedPages.SequenceEqual(new[] { 1 }), $"stamped pages {string.Join(", ", textResult.StampedPages)} instead of 1.");
+                Require(Pdf.ExtractText(text, new PdfTextExtractionOptions { Pages = PdfPageRange.Parse("1") }).Text.Contains("DRAFT"), "the text is not on page 1.");
+                Require(!Pdf.ExtractText(text, new PdfTextExtractionOptions { Pages = PdfPageRange.Parse("2") }).Text.Contains("DRAFT"), "the text is also on page 2.");
+
+                var image = Pdf.Stamp(source.Value, new PdfStampOptions { Image = Png(), ImageWidth = 200, Opacity = 0.4, Rotation = -15, Position = PdfStampPosition.BottomLeft }, out var imageResult);
+                Require(imageResult.StampedPages.Count == 2, $"the image was stamped on {imageResult.StampedPages.Count} pages.");
+                Require(Pdf.Inspect(image).Images.Count > Pdf.Inspect(source.Value).Images.Count, "the image is not in the output.");
+                return "red text at 50%, 30°, top right, page 1 only, behind the content; a PNG at 200 pt, 40%, -15°, bottom left";
+            }),
             ("Rotate, delete, merge and split pages", () =>
             {
                 var rotated = Pdf.RotatePages(source.Value, new PdfRotatePagesOptions { Angle = 90, Pages = PdfPageRange.Parse("1") }, out _);
@@ -264,6 +286,21 @@ internal static class SelfTest
         sb.AppendLine();
         sb.AppendLine($"{list.Count(r => r.Passed)} of {list.Count} checks passed.");
         return sb.ToString();
+    }
+
+    /// <summary>A small PNG with transparency, drawn with System.Drawing.</summary>
+    private static byte[] Png()
+    {
+        using var bitmap = new System.Drawing.Bitmap(120, 60);
+        using (var g = System.Drawing.Graphics.FromImage(bitmap))
+        {
+            g.Clear(System.Drawing.Color.Transparent);
+            g.FillEllipse(System.Drawing.Brushes.SteelBlue, 0, 0, 119, 59);
+        }
+
+        using var output = new MemoryStream();
+        bitmap.Save(output, System.Drawing.Imaging.ImageFormat.Png);
+        return output.ToArray();
     }
 
     private static byte[] HtmlToPdf(string html)
