@@ -1,13 +1,19 @@
 # Builds the .NET Framework 4.8 Windows Forms sample on Windows, runs its self-test against the net462 build of
-# PdfUtil, and publishes the app as a GitHub release. Pushing a tag such as winforms-sample-v1.0.0 releases it, and
-# so does running the workflow by hand with a release tag (the tag is then created on the commit it ran on). Without
-# one it only builds and tests; the zip and report are kept as workflow artifacts either way.
+# PdfUtil, and publishes the app as a GitHub release. To release, change the tag in
+# samples/PdfUtil.WinFormsSample/release-version.txt (for example winforms-sample-v1.0.1) and push, on any branch;
+# the tag is created on that commit. Pushing such a tag, or running the workflow by hand with a release tag, also
+# releases. The zip and the self-test report are kept as workflow artifacts either way.
 name: WinForms sample release
 
 on:
   push:
+    # Tag pushes ignore the paths filter; branch pushes run only when the release version changes.
+    branches:
+      - '**'
     tags:
       - 'winforms-sample-v*'
+    paths:
+      - 'samples/PdfUtil.WinFormsSample/release-version.txt'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -23,6 +29,17 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Release tag
+        shell: pwsh
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME }
+                 elseif ($env:GITHUB_EVENT_NAME -eq 'push') { (Get-Content samples/PdfUtil.WinFormsSample/release-version.txt -Raw).Trim() }
+                 else { $env:INPUT_TAG }
+          if ($tag -and $tag -notmatch '^winforms-sample-v[0-9][0-9A-Za-z.\-]*$') { throw "Not a release tag: '$tag'" }
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # The net462 build of PdfUtil needs the .NET 10 SDK (C# 14 extension members).
       - uses: actions/setup-dotnet@v4
@@ -42,8 +59,6 @@ jobs:
 
       - name: Package
         shell: pwsh
-        env:
-          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
         run: |
           $name = if ($env:RELEASE_TAG) { $env:RELEASE_TAG } else { 'winforms-sample-dev' }
           "ZIP_NAME=$name.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -59,12 +74,12 @@ jobs:
           if-no-files-found: ignore
 
       - name: Release
-        if: github.ref_type == 'tag' || inputs.release_tag != ''
+        if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
+          tag_name: ${{ env.RELEASE_TAG }}
           target_commitish: ${{ github.sha }}
-          name: PdfUtil WinForms sample (${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }})
+          name: PdfUtil WinForms sample (${{ env.RELEASE_TAG }})
           prerelease: true
           files: |
             ${{ env.ZIP_NAME }}
