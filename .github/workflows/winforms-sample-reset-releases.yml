@@ -1,0 +1,36 @@
+# One-off: deletes every winforms-sample-v* release and tag, so the sample can be released again from 1.0.0.
+# It runs when this file is pushed, and is removed again in the next commit.
+name: WinForms sample reset releases
+
+on:
+  push:
+    branches:
+      - '**'
+    paths:
+      - '.github/workflows/winforms-sample-reset-releases.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Delete releases and tags
+        run: |
+          set -euo pipefail
+          for tag in $(gh release list --limit 100 --json tagName --jq '.[].tagName | select(startswith("winforms-sample-v"))'); do
+            echo "Deleting release and tag $tag"
+            gh release delete "$tag" --cleanup-tag --yes
+          done
+          for ref in $(gh api "repos/$GH_REPO/git/matching-refs/tags/winforms-sample-v" --jq '.[].ref'); do
+            echo "Deleting leftover $ref"
+            gh api -X DELETE "repos/$GH_REPO/git/$ref"
+          done
+          left=$(gh release list --limit 100 --json tagName --jq '[.[].tagName | select(startswith("winforms-sample-v"))] | length')
+          tags=$(gh api "repos/$GH_REPO/git/matching-refs/tags/winforms-sample-v" --jq 'length')
+          echo "Remaining releases: $left, tags: $tags"
+          test "$left" -eq 0 && test "$tags" -eq 0
